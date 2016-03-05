@@ -30,7 +30,7 @@ void print_usage(const char* name)
 {
     fprintf(
         stderr,
-        "Usage: %s <own-key-file> <key-directory> [<address> <address> ...]\n"
+        "Usage: %s <local-key> <remote-key> [<address>:<port>]\n"
         "       %s --generate <size> <new-key-file>\n",
         name, name
     );

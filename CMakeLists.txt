@@ -54,6 +54,7 @@ file(GLOB SRC_C
     src/main.c
     src/key.c
     src/args.c
+    src/net.c
 )
 
 add_executable(otpchat ${SRC_C})

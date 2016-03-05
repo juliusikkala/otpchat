@@ -21,41 +21,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-#ifndef OTPCHAT_ARGS_H_
-#define OTPCHAT_ARGS_H_
-    #include <stddef.h>
+#ifndef OTPCHAT_NET_H_
+#define OTPCHAT_NET_H_
     #include <stdint.h>
-    #include "net.h"
-
-    struct generate_args
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netdb.h>
+    struct address
     {
-        size_t key_size;
-        char* key_path;
+        char* node;
+        uint16_t port;
     };
-    void free_generate_args(struct generate_args* a);
-    struct chat_args
-    {
-        char* local_key_path;
-        char* remote_key_path;
-
-        unsigned wait_for_remote;
-        struct address addr;
-    };
-    void free_chat_args(struct chat_args* a);
-    struct args
-    {
-        enum
-        {
-            MODE_INVALID=0,
-            MODE_CHAT,
-            MODE_GENERATE
-        } mode;
-        union
-        {
-            struct chat_args chat;
-            struct generate_args generate;
-        } mode_args;
-    };
-    unsigned parse_args(int argc, char** argv, struct args* a);
-    void free_args(struct args* a);
+    //Parses an address of form node:port. Returns non-zero on failure.
+    unsigned parse_address(const char* text, struct address* addr);
+    void free_address(struct address* addr);
 #endif

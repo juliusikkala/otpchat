@@ -21,41 +21,41 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-#ifndef OTPCHAT_ARGS_H_
-#define OTPCHAT_ARGS_H_
-    #include <stddef.h>
-    #include <stdint.h>
-    #include "net.h"
+#include "net.h"
+#include <stdlib.h>
+#include <string.h>
 
-    struct generate_args
+//Parses an address of form node:port. Returns non-zero on failure.
+unsigned parse_address(const char* text, struct address* addr)
+{
+    //Find last ':'
+    const char* separator=strrchr(text, ':');
+    if(separator==NULL||separator==text)
     {
-        size_t key_size;
-        char* key_path;
-    };
-    void free_generate_args(struct generate_args* a);
-    struct chat_args
+        return 1;
+    }
+    //Read node name
+    size_t len=separator-text;
+    addr->node=(char*)malloc(len+1);
+    memcpy(addr->node, text, len);
+    addr->node[separator-text]=0;
+    //Read port number
+    char* port_end=NULL;
+    long int port=strtol(separator+1, &port_end, 0);
+    if(port<0||port>=(1<<16)||*port_end!=0)
     {
-        char* local_key_path;
-        char* remote_key_path;
-
-        unsigned wait_for_remote;
-        struct address addr;
-    };
-    void free_chat_args(struct chat_args* a);
-    struct args
+        free(addr->node);
+        return 1;
+    }
+    addr->port=port;
+    return 0;
+}
+void free_address(struct address* addr)
+{
+    if(addr->node!=NULL)
     {
-        enum
-        {
-            MODE_INVALID=0,
-            MODE_CHAT,
-            MODE_GENERATE
-        } mode;
-        union
-        {
-            struct chat_args chat;
-            struct generate_args generate;
-        } mode_args;
-    };
-    unsigned parse_args(int argc, char** argv, struct args* a);
-    void free_args(struct args* a);
-#endif
+        free(addr->node);
+        addr->node=NULL;
+    }
+    addr->port=0;
+}

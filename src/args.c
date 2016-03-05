@@ -36,30 +36,24 @@ void free_generate_args(struct generate_args* a)
 }
 void free_chat_args(struct chat_args* a)
 {
-    if(a->key_path!=NULL)
+    if(a->local_key_path!=NULL)
     {
-        free(a->key_path);
-        a->key_path=NULL;
+        free(a->local_key_path);
+        a->local_key_path=NULL;
     }
-    if(a->key_directory!=NULL)
+    if(a->remote_key_path!=NULL)
     {
-        free(a->key_directory);
-        a->key_directory=NULL;
+        free(a->remote_key_path);
+        a->remote_key_path=NULL;
     }
+    free_address(&a->addr);
 }
 
-//Returns the index of the string in argv or negative for error
-static int find_str_in_argv(int argc, char** argv, const char* str)
+static char* copy_string(const char* str)
 {
-    int i=0;
-    for(i=0;i<argc;++i)
-    {
-        if(strcmp(argv[i], str)==0)
-        {
-            return i;
-        }
-    }
-    return -1;
+    char* res=(char*)malloc(strlen(str)+1);
+    strcpy(res, str);
+    return res;
 }
 static unsigned parse_generate_args(
     int argc,
@@ -76,8 +70,7 @@ static unsigned parse_generate_args(
     {
         return 1;
     }
-    a->key_path=(char*)malloc(strlen(argv[1])+1);
-    strcpy(a->key_path, argv[1]);
+    a->key_path=copy_string(argv[1]);
     return 0;
 }
 static unsigned parse_chat_args(
@@ -85,12 +78,26 @@ static unsigned parse_chat_args(
     char** argv,
     struct chat_args* a
 ){
-    if(argc<2)
+    if(argc<2||argc>3)
     {
         return 1;
     }
-    a->key_path=NULL;
-    a->key_directory=NULL;
+    if(argc==3)
+    {
+        a->wait_for_remote=0;
+        if(parse_address(argv[2], &a->addr))
+        {
+            return 1;
+        }
+    }
+    else
+    {
+        a->wait_for_remote=1;
+        a->addr.node=NULL;
+        a->addr.port=0;
+    }
+    a->local_key_path=copy_string(argv[0]);
+    a->remote_key_path=copy_string(argv[1]);
     return 0;
 }
 unsigned parse_args(int argc, char** argv, struct args* a)
