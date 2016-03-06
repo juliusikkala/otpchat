@@ -29,7 +29,8 @@ SOFTWARE.
     struct key
     {
         FILE* stream;
-        uint64_t id, head;
+        uint8_t id[16];
+        uint64_t head;
     };
     unsigned open_key(const char* path, struct key* k);
     unsigned create_key(const char* path, struct key* k, size_t sz);
@@ -47,12 +48,12 @@ SOFTWARE.
         struct block* key_block,
         uint64_t bytes
     );
-    unsigned cipher(
+    unsigned encrypt(
         const struct block* key,
         const struct block* input,
         struct block* output
     );
-    unsigned decipher(
+    unsigned decrypt(
         const struct block* key,
         const struct block* input,
         struct block* output

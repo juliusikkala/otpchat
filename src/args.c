@@ -24,6 +24,7 @@ SOFTWARE.
 #include "args.h"
 #include <string.h>
 #include <stdlib.h>
+#define DEFAULT_PORT 14137
 
 void free_generate_args(struct generate_args* a)
 {
@@ -84,17 +85,28 @@ static unsigned parse_chat_args(
     }
     if(argc==3)
     {
-        a->wait_for_remote=0;
-        if(parse_address(argv[2], &a->addr))
+        //It is possible that only a port was given.
+        char* endptr=NULL;
+        a->addr.port=strtol(argv[2], &endptr, 0);
+        if(*endptr!='\0')
         {
-            return 1;
+            //Not a port, is it an address?
+            if(parse_address(argv[2], &a->addr))
+            {
+                return 1;
+            }
+        }
+        else
+        {
+            a->wait_for_remote=1;
+            a->addr.node=NULL;
         }
     }
     else
     {
         a->wait_for_remote=1;
         a->addr.node=NULL;
-        a->addr.port=0;
+        a->addr.port=DEFAULT_PORT;
     }
     a->local_key_path=copy_string(argv[0]);
     a->remote_key_path=copy_string(argv[1]);

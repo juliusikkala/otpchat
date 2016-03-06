@@ -35,7 +35,7 @@ SOFTWARE.
 #define KEY_MAGIC "OTPCHAT0"
 #define KEY_HEAD_OFFSET 8
 #define KEY_ID_OFFSET 16
-#define KEY_DATA_OFFSET 24
+#define KEY_DATA_OFFSET 32
 #define BUFFER_SIZE 4096
 
 unsigned open_key(const char* path, struct key* k)
@@ -55,7 +55,6 @@ unsigned open_key(const char* path, struct key* k)
         fclose(k->stream);
         return 1;
     }
-    k->id=le64toh(k->id);
     k->head=le64toh(k->head);
     if(fseek(k->stream, k->head+KEY_DATA_OFFSET, SEEK_SET)!=0)
     {
@@ -81,8 +80,7 @@ unsigned create_key(const char* path, struct key* k, size_t sz)
     //Generate random id
     read(urandom, &k->id, sizeof(k->id));
     //Write id
-    uint64_t id_le=htole64(k->id);
-    fwrite(&id_le, 1, sizeof(id_le), k->stream);
+    fwrite(&k->id, 1, sizeof(k->id), k->stream);
 
     //Write key data
     uint8_t* buffer=(uint8_t*)malloc(BUFFER_SIZE);
@@ -144,7 +142,7 @@ unsigned get_key_block(struct key* k, struct block* key_block, uint64_t bytes)
     }
     return 0;
 }
-unsigned cipher(
+unsigned encrypt(
     const struct block* key,
     const struct block* input,
     struct block* output
@@ -161,10 +159,10 @@ unsigned cipher(
     }
     return 0;
 }
-unsigned decipher(
+unsigned decrypt(
     const struct block* key,
     const struct block* input,
     struct block* output
 ){
-    return cipher(key, input, output);
+    return encrypt(key, input, output);
 }
