@@ -95,6 +95,10 @@ static unsigned parse_chat_args(
             {
                 return 1;
             }
+            if(a->addr.port==0)
+            {
+                a->addr.port=DEFAULT_PORT;
+            }
             a->wait_for_remote=0;
         }
         else

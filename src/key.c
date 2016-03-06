@@ -57,6 +57,9 @@ unsigned open_key(const char* path, struct key* k)
         return 1;
     }
     k->head=le64toh(k->head);
+    //Get key size
+    fseek(k->stream, 0, SEEK_END);
+    k->size=ftell(k->stream)-KEY_DATA_OFFSET;
     if(fseek(k->stream, k->head+KEY_DATA_OFFSET, SEEK_SET)!=0)
     {
         fclose(k->stream);
@@ -101,6 +104,7 @@ unsigned create_key(const char* path, struct key* k, size_t sz)
     }
     free(buffer);
     fseek(k->stream, KEY_DATA_OFFSET, SEEK_SET);
+    k->size=sz;
     return 0;
 }
 void close_key(struct key* k)
@@ -113,12 +117,22 @@ void close_key(struct key* k)
     fclose(k->stream);
     k->stream=NULL;
 }
+void seek_key(struct key* k, uint64_t new_head)
+{
+    fseek(k->stream, new_head+KEY_DATA_OFFSET, SEEK_SET);
+    k->head=new_head;
+}
 
 void create_block_from_str(const char* str, struct block* b)
 {
-    b->sz=strlen(str);
-    b->data=(uint8_t*)malloc(b->sz);
-    memcpy(b->data, str, b->sz);
+    b->size=strlen(str);
+    b->data=(uint8_t*)malloc(b->size);
+    memcpy(b->data, str, b->size);
+}
+void create_block(size_t size, struct block* b)
+{
+    b->size=size;
+    b->data=(uint8_t*)calloc(b->size, 1);
 }
 void free_block(struct block* b)
 {
@@ -126,15 +140,18 @@ void free_block(struct block* b)
     {
         free(b->data);
         b->data=NULL;
-        b->sz=0;
+        b->size=0;
     }
 }
-unsigned get_key_block(struct key* k, struct block* key_block, uint64_t bytes)
-{
-    key_block->sz=bytes;
-    key_block->data=(uint8_t*)malloc(key_block->sz);
+static unsigned get_key_block(
+    struct key* k,
+    struct block* key_block,
+    uint64_t bytes
+){
+    key_block->size=bytes;
+    key_block->data=(uint8_t*)malloc(key_block->size);
     size_t read_bytes=fread(key_block->data, 1, bytes, k->stream);
-    key_block->sz=read_bytes;
+    key_block->size=read_bytes;
     k->head+=read_bytes;
 
     if(read_bytes!=bytes)
@@ -144,26 +161,24 @@ unsigned get_key_block(struct key* k, struct block* key_block, uint64_t bytes)
     return 0;
 }
 unsigned encrypt(
-    const struct block* key,
-    const struct block* input,
-    struct block* output
+    struct key* k,
+    struct block* message
 ){
-    if(key->sz<input->sz)
+    struct block key_block;
+    if(get_key_block(k, &key_block, message->size))
     {//There's not enough key data
         return 1;
     }
-    output->data=(uint8_t*)malloc(input->sz);
-    output->sz=input->sz;
-    for(uint64_t i=0;i<input->sz;++i)
+    for(uint64_t i=0;i<message->size;++i)
     {
-        output->data[i]=key->data[i]^input->data[i];
+        message->data[i]=key_block.data[i]^message->data[i];
     }
+    free_block(&key_block);
     return 0;
 }
 unsigned decrypt(
-    const struct block* key,
-    const struct block* input,
-    struct block* output
+    struct key* k,
+    struct block* message
 ){
-    return encrypt(key, input, output);
+    return encrypt(k, message);
 }

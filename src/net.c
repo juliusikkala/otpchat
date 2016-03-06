@@ -185,6 +185,9 @@ unsigned node_listen(struct node* local, uint16_t port)
         freeaddrinfo(local->info);
         return 1;
     }
+    int arg=1;
+    //Enable socket reuse.
+    setsockopt(local->socket, SOL_SOCKET, SO_REUSEADDR, &arg, sizeof(arg));
     if(bind(local->socket, local->info->ai_addr, local->info->ai_addrlen)==-1||
        listen(local->socket, 5)==-1)
     {

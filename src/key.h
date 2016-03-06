@@ -29,33 +29,29 @@ SOFTWARE.
     struct key
     {
         FILE* stream;
+        size_t size;
         uint8_t id[16];
         uint64_t head;
     };
     unsigned open_key(const char* path, struct key* k);
     unsigned create_key(const char* path, struct key* k, size_t sz);
     void close_key(struct key* k);
+    void seek_key(struct key* k, uint64_t new_head);
 
     struct block
     {
         uint8_t* data;
-        uint64_t sz;
+        size_t size;
     };
     void create_block_from_str(const char* str, struct block* b);
+    void create_block(size_t size, struct block* b);
     void free_block(struct block* b);
-    unsigned get_key_block(
-        struct key* k,
-        struct block* key_block,
-        uint64_t bytes
-    );
     unsigned encrypt(
-        const struct block* key,
-        const struct block* input,
-        struct block* output
+        struct key* k,
+        struct block* message
     );
     unsigned decrypt(
-        const struct block* key,
-        const struct block* input,
-        struct block* output
+        struct key* k,
+        struct block* message
     );
 #endif
