@@ -47,10 +47,11 @@ unsigned open_key(const char* path, struct key* k)
     }
 
     char magic_check[8]={0};
-    if(fread(magic_check, 1, strlen(KEY_MAGIC), k->stream)!=strlen(KEY_MAGIC)||
-       strncmp(magic_check, KEY_MAGIC, strlen(KEY_MAGIC))!=0||
-       fread(&k->head, sizeof(k->head), 1, k->stream)!=sizeof(k->head)||
-       fread(&k->id, sizeof(k->id), 1, k->stream)!=sizeof(k->id))
+    size_t sz=2;
+    if(fread(magic_check, 1, 8, k->stream)!=8||
+       strncmp(magic_check, KEY_MAGIC, 8)!=0||
+       (sz=fread(&k->head, 1, sizeof(k->head), k->stream))!=sizeof(k->head)||
+       fread(&k->id, 1, sizeof(k->id), k->stream)!=sizeof(k->id))
     {
         fclose(k->stream);
         return 1;

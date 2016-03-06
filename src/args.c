@@ -95,6 +95,7 @@ static unsigned parse_chat_args(
             {
                 return 1;
             }
+            a->wait_for_remote=0;
         }
         else
         {

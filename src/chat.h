@@ -21,45 +21,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-#include <stdio.h>
-#include "key.h"
-#include "args.h"
-#include "chat.h"
-
-void print_usage(const char* name)
-{
-    fprintf(
-        stderr,
-        "Usage: %s <local-key> <remote-key> [<address>[:<port>]]\n"
-        "       %s --generate <size> <new-key-file>\n",
-        name, name
-    );
-}
-void generate(struct generate_args* a)
-{
-    struct key new_key;
-    create_key(a->key_path, &new_key, a->key_size);
-    close_key(&new_key);
-}
-int main(int argc, char** argv)
-{
-    struct args args;
-    if(parse_args(argc, argv, &args))
-    {
-        print_usage(argv[0]);
-        return 1;
-    }
-    switch(args.mode)
-    {
-    case MODE_CHAT:
-        chat(&args.mode_args.chat);
-        break;
-    case MODE_GENERATE:
-        generate(&args.mode_args.generate);
-        break;
-    default:
-        break;
-    }
-    free_args(&args);
-    return 0;
-}
+#ifndef OTPCHAT_CHAT_H_
+#define OTPCHAT_CHAT_H_
+    #include "args.h"
+    void chat(struct chat_args* a);
+#endif
