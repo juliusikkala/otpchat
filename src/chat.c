@@ -437,6 +437,12 @@ static void chat_end(struct chat_state* state)
     close_key(&state->remote_key);
     free_block(&state->receiving);
     free_block(&state->sending);
+    free_message(&state->current_message);
+    for(size_t i=0;i<state->history_size;++i)
+    {
+        free_message(&state->history[i]);
+    }
+    free(state->history);
 }
 static unsigned chat_send_block(struct chat_state* state, struct block* b)
 {
