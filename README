@@ -9,3 +9,5 @@ must have a copy of the sender's key in order to decrypt the data.
 There is no way to stop impersonation, so every user must be trusted. This
 should not be a problem since they must have been already trusted with the
 keys.
+
+![The program in use](https://i.imgur.com/LO5zHiL.png "Screenshot")
