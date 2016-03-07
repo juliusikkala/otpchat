@@ -416,6 +416,7 @@ static unsigned chat_init(struct chat_args* a, struct chat_state* state)
     initscr();
     cbreak();
     noecho();
+    keypad(stdscr, TRUE);
     start_color();
     init_pair(COLOR_KEY_USED, COLOR_WHITE, COLOR_RED);
     init_pair(COLOR_KEY_LEFT, COLOR_WHITE, COLOR_GREEN);
@@ -473,7 +474,7 @@ static unsigned chat_send_block(struct chat_state* state, struct block* b)
 }
 static unsigned chat_handle_input(struct chat_state* state)
 {
-    char c=getch();
+    int c=getch();
     if(c=='\n')
     {//Newline sends the message.
         if(state->current_message.text.size==0)
@@ -491,7 +492,7 @@ static unsigned chat_handle_input(struct chat_state* state)
             return 1;
         }
     }
-    else
+    else if(c<256)
     {//Not newline, message continues.
         state->current_message.text.data=(uint8_t*)realloc(
             state->current_message.text.data,
@@ -626,7 +627,10 @@ void chat(struct chat_args* a)
                 NULL
             )==-1
         ){
-            fprintf(stderr, "select() failed: %s\n", strerror(errno));
+            //Resizing the terminal causes select to fail with "Interrupted
+            //system call", so we just update the ui and carry on.
+            chat_update_ui(&state);
+            continue;
         }
         if(FD_ISSET(STDIN_FILENO, &read_ready))
         {
