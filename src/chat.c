@@ -36,6 +36,7 @@ SOFTWARE.
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <locale.h>
 #define TIMEOUT_MS 2000
 #define MESSAGE_HEADER_SIZE 12
 #define MESSAGE_SIZE_OFFSET 0
@@ -413,6 +414,7 @@ static unsigned chat_init(struct chat_args* a, struct chat_state* state)
     state->current_message.text.data=NULL;
     state->current_message.text.size=0;
 
+    setlocale(LC_ALL, "");
     initscr();
     cbreak();
     noecho();

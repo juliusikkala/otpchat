@@ -43,7 +43,8 @@ if(MINGW)
 endif(MINGW)
 
 set(CURSES_NEED_NCURSES TRUE)
-find_package(Curses REQUIRED)
+set(CURSES_WANT_NCURSESW TRUE)
+find_package(NCursesw REQUIRED)
 
 include_directories(
     src
