@@ -193,6 +193,42 @@ static const char* chat_id_name(struct chat_state* state, uint32_t id)
         return "Unknown";
     }
 }
+static unsigned utf8_char_width(const char* utf8)
+{
+    if((*utf8&0x80)==0)
+    {
+        return 1;
+    }
+    else if((*utf8&0xE0)==0xC0)
+    {
+        return 2;
+    }
+    else if((*utf8&0xF0)==0xE0)
+    {
+        return 3;
+    }
+    else if((*utf8&0xF8)==0xF0)
+    {
+        return 4;
+    }
+    else if((*utf8&0xFC)==0xF8)
+    {
+        return 5;
+    }
+    else if((*utf8&0xFE)==0xFC)
+    {
+        return 6;
+    }
+    return 0;
+}
+static unsigned utf8_reverse_char_width(const char* utf8)
+{
+    while((*utf8&0xC0)==0x80)
+    {
+        utf8--;
+    }
+    return utf8_char_width(utf8);
+}
 static unsigned chat_message_lines(const struct message* msg, unsigned width)
 {
     return msg->text.size==0?0:(msg->text.size-1)/width+1;
@@ -503,6 +539,18 @@ static unsigned chat_handle_input(struct chat_state* state)
         state->current_message.text.data[
             state->current_message.text.size-1
         ]=(uint8_t)c;
+    }
+    else if(c==KEY_BACKSPACE)
+    {//Backspace, remove preceding character
+        //Let's cheat a bit :-)
+        if(state->current_message.text.size>0)
+        {
+            state->current_message.text.size-=
+                utf8_reverse_char_width(
+                    (char*)state->current_message.text.data+
+                           state->current_message.text.size-1
+                );
+        }
     }
     chat_update_ui(state);
     return 0;
