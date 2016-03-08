@@ -67,6 +67,7 @@ struct chat_state
     struct message* history;
     size_t history_size;
     struct message current_message;
+    size_t cursor_index;
 
     struct block receiving;
     size_t received_size;
@@ -193,41 +194,51 @@ static const char* chat_id_name(struct chat_state* state, uint32_t id)
         return "Unknown";
     }
 }
-static unsigned utf8_char_width(const char* utf8)
-{
-    if((*utf8&0x80)==0)
+static int next_char(
+    const char* mbs_begin,
+    size_t cursor_pos,
+    size_t mbs_len
+){
+    mblen(NULL, 0);
+    size_t i=0;
+    while(i<=cursor_pos&&i<mbs_len)
     {
-        return 1;
+        int len=mblen(mbs_begin+i, mbs_len-i);
+        if(len<1) break;
+        i+=len;
     }
-    else if((*utf8&0xE0)==0xC0)
-    {
-        return 2;
-    }
-    else if((*utf8&0xF0)==0xE0)
-    {
-        return 3;
-    }
-    else if((*utf8&0xF8)==0xF0)
-    {
-        return 4;
-    }
-    else if((*utf8&0xFC)==0xF8)
-    {
-        return 5;
-    }
-    else if((*utf8&0xFE)==0xFC)
-    {
-        return 6;
-    }
-    return 0;
+    return (ssize_t)i-(ssize_t)cursor_pos;
 }
-static unsigned utf8_reverse_char_width(const char* utf8)
-{
-    while((*utf8&0xC0)==0x80)
+static int prev_char(
+    const char* mbs_begin,
+    size_t cursor_pos,
+    size_t mbs_len
+){
+    mblen(NULL, 0);
+    size_t prev=0;
+    size_t i=0;
+    while(i<cursor_pos&&i<mbs_len)
     {
-        utf8--;
+        int len=mblen(mbs_begin+i, mbs_len-i);
+        if(len<1) break;
+        prev=i;
+        i+=len;
     }
-    return utf8_char_width(utf8);
+    return (ssize_t)prev-(ssize_t)cursor_pos;
+}
+static size_t count_chars(const char* mbs_begin, size_t mbs_len)
+{
+    mblen(NULL, 0);
+    size_t chars=0;
+    size_t i=0;
+    while(i<mbs_len)
+    {
+        int len=mblen(mbs_begin+i, mbs_len-i);
+        if(len<1) break;
+        i+=len;
+        chars++;
+    }
+    return chars;
 }
 static unsigned chat_message_lines(const struct message* msg, unsigned width)
 {
@@ -381,6 +392,12 @@ static void chat_update_ui(struct chat_state* state)
         20
     );
     chat_draw_message_text(&state->current_message, 0, input_line+1, width);
+    //Move cursor to the correct position
+    size_t cursor_pos=count_chars(
+        (char*)state->current_message.text.data,
+        state->cursor_index
+    );
+    move(input_line+1+cursor_pos/width, cursor_pos%width);
     refresh();
 }
 static void chat_push_message(
@@ -449,6 +466,7 @@ static unsigned chat_init(struct chat_args* a, struct chat_state* state)
     state->current_message.id=ID_LOCAL;
     state->current_message.text.data=NULL;
     state->current_message.text.size=0;
+    state->cursor_index=0;
 
     setlocale(LC_ALL, "");
     initscr();
@@ -525,6 +543,7 @@ static unsigned chat_handle_input(struct chat_state* state)
 
         free_message(&state->current_message);
         state->current_message.id=ID_LOCAL;
+        state->cursor_index=0;
         if(fail)
         {
             return 1;
@@ -534,23 +553,62 @@ static unsigned chat_handle_input(struct chat_state* state)
     {//Not newline, message continues.
         state->current_message.text.data=(uint8_t*)realloc(
             state->current_message.text.data,
-            ++state->current_message.text.size
+            state->current_message.text.size+1
+        );
+        memmove(
+            state->current_message.text.data+state->cursor_index+1,
+            state->current_message.text.data+state->cursor_index,
+            state->current_message.text.size-state->cursor_index
         );
         state->current_message.text.data[
-            state->current_message.text.size-1
+            state->cursor_index
         ]=(uint8_t)c;
+        state->current_message.text.size++;
+        state->cursor_index++;
     }
     else if(c==KEY_BACKSPACE)
     {//Backspace, remove preceding character
-        //Let's cheat a bit :-)
-        if(state->current_message.text.size>0)
+        int offset=prev_char(
+            (char*)state->current_message.text.data,
+            state->cursor_index,
+            state->current_message.text.size
+        );
+        if(offset!=0)
         {
-            state->current_message.text.size-=
-                utf8_reverse_char_width(
-                    (char*)state->current_message.text.data+
-                           state->current_message.text.size-1
-                );
+            memmove(
+                state->current_message.text.data+state->cursor_index+offset,
+                state->current_message.text.data+state->cursor_index,
+                state->current_message.text.size-state->cursor_index
+            );
+            state->cursor_index+=offset;
+            state->current_message.text.size+=offset;
         }
+    }
+    else if(c==KEY_LEFT)
+    {//Move one character back
+        int offset=prev_char(
+            (char*)state->current_message.text.data,
+            state->cursor_index,
+            state->current_message.text.size
+        );
+        state->cursor_index+=offset;
+    }
+    else if(c==KEY_RIGHT)
+    {//Move one character forwards
+        int offset=next_char(
+            (char*)state->current_message.text.data,
+            state->cursor_index,
+            state->current_message.text.size
+        );
+        state->cursor_index+=offset;
+    }
+    else if(c==KEY_HOME)
+    {
+        state->cursor_index=0;
+    }
+    else if(c==KEY_END)
+    {
+        state->cursor_index=state->current_message.text.size;
     }
     chat_update_ui(state);
     return 0;
