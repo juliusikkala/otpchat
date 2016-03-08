@@ -381,14 +381,14 @@ static void chat_update_ui(struct chat_state* state)
         "Local:  ",
         &state->local_key,
         0,
-        input_line+2,
+        height-1,
         20
     );
     chat_draw_key_usage(
         "Remote: ",
         &state->remote_key,
         local_key_usage_len+1,
-        input_line+2,
+        height-1,
         20
     );
     chat_draw_message_text(&state->current_message, 0, input_line+1, width);
