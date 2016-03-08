@@ -76,110 +76,6 @@ struct chat_state
     size_t sent_size;
 };
 
-static unsigned passive_connect(
-    struct address* addr,
-    struct chat_state* state
-){
-    //"Server" mode, attempts to handshake all connectors and continues when
-    //the first handshake succeeds.
-    struct node local;   
-    fd_set readfds;
-    if(node_listen(&local, addr->port))
-    {
-        fprintf(stderr, "Unable to listen port %d\n", addr->port);
-        return 1;
-    }
-    FD_ZERO(&readfds);
-    FD_SET(local.socket, &readfds);
-    while(1)
-    {
-        fd_set read_temp=readfds;
-        if(select(local.socket+1, &read_temp, NULL, NULL, NULL)==-1)
-        {
-            fprintf(stderr, "select() failed: %s\n", strerror(errno));
-            node_close(&local);
-            return 1;
-        }
-        if(!FD_ISSET(local.socket, &read_temp)||
-           node_accept(&local, &state->remote))
-        {
-            continue;
-        }
-        struct key* accepted_key=NULL;
-        if( node_handshake(
-                &state->remote,
-                &state->local_key,
-                &state->remote_key,
-                1,
-                &accepted_key,
-                TIMEOUT_MS
-            )
-        ){
-            struct address remote_addr;
-            node_get_address(&state->remote, &remote_addr);
-            fprintf(
-                stderr,
-                "Failed handshake with %s:%d\n",
-                remote_addr.node, remote_addr.port
-            );
-            free_address(&remote_addr);
-            node_close(&state->remote);
-        }
-        else
-        {
-            //Handshake succeeded!
-            break;
-        }
-    }
-    node_close(&local);
-    return 0;
-}
-static unsigned active_connect(
-    struct address* addr,
-    struct chat_state* state
-){
-    //"Client" mode, try to connect to the remote
-    fd_set writefds;
-    if(node_connect(&state->remote, addr))
-    {
-        fprintf(
-            stderr,
-            "Connecting to %s:%d\n failed\n",
-            addr->node, addr->port
-        );
-        return 1;
-    }
-    FD_ZERO(&writefds);
-    FD_SET(state->remote.socket, &writefds);
-    if(select(state->remote.socket+1, NULL, &writefds, NULL, NULL)==-1)
-    {
-        fprintf(stderr, "select() failed: %s\n", strerror(errno));
-        return 1;
-    }
-    struct key* accepted_key=NULL;
-    if( node_handshake(
-            &state->remote,
-            &state->local_key,
-            &state->remote_key,
-            1,
-            &accepted_key,
-            TIMEOUT_MS
-        )
-    ){
-        struct address remote_addr;
-        node_get_address(&state->remote, &remote_addr);
-        fprintf(
-            stderr,
-            "Failed handshake with %s:%d\n",
-            remote_addr.node, remote_addr.port
-        );
-        free_address(&remote_addr);
-        node_close(&state->remote);
-        return 1;
-    }
-    //Handshake succeeded!
-    return 0;
-}
 static const char* chat_id_name(struct chat_state* state, uint32_t id)
 {
     switch(id)
@@ -414,17 +310,34 @@ static void chat_push_message(
     new_msg->text.size=msg->text.size;
     new_msg->text.data=(uint8_t*)malloc(msg->text.size);
     memcpy(new_msg->text.data, msg->text.data, msg->text.size);
+
+    chat_update_ui(state);
 }
 static void chat_push_status(
     struct chat_state* state,
-    const char* status_message
+    const char* format,
+    ...
 ){
-    struct message temp;
-    temp.id=ID_STATUS;
-    temp.timestamp=time(NULL);
-    temp.text.size=strlen(status_message);
-    temp.text.data=(uint8_t*)status_message;
-    chat_push_message(state, &temp);
+    va_list args, args_copy;
+    va_start(args, format);
+    va_copy(args_copy, args);
+
+    state->history=(struct message*)realloc(
+        state->history,
+        (++state->history_size)*sizeof(struct message)
+    );
+
+    struct message* new_msg=&state->history[state->history_size-1];
+    new_msg->id=ID_STATUS;
+    new_msg->timestamp=time(NULL);
+    new_msg->text.size=vsnprintf(NULL, 0, format, args_copy);
+    new_msg->text.data=(uint8_t*)malloc(new_msg->text.size+1);
+    vsprintf((char*)new_msg->text.data, format, args);
+
+    va_end(args);
+    va_end(args_copy);
+
+    chat_update_ui(state);
 }
 static unsigned chat_init(struct chat_args* a, struct chat_state* state)
 {
@@ -439,22 +352,7 @@ static unsigned chat_init(struct chat_args* a, struct chat_state* state)
         close_key(&state->local_key);
         return 1;
     }
-    if(a->wait_for_remote)
-    {
-        printf("Listening for connection on port %d\n", a->addr.port);
-        if(passive_connect(&a->addr, state))
-        {
-            goto end;
-        }
-    }
-    else
-    {
-        printf("Connecting to %s:%d\n", a->addr.node, a->addr.port);
-        if(active_connect(&a->addr, state))
-        {
-            goto end;
-        }
-    }
+    state->remote.socket=-1;
     state->receiving.data=NULL;
     state->receiving.size=0;
     state->received_size=0;
@@ -481,10 +379,149 @@ static unsigned chat_init(struct chat_args* a, struct chat_state* state)
     init_pair(ID_REMOTE+COLOR_ID_OFFSET, COLOR_WHITE, COLOR_CYAN);
     chat_update_ui(state);
     return 0;
-end:
-    close_key(&state->local_key);
-    close_key(&state->remote_key);
-    return 1;
+}
+static unsigned passive_connect(
+    struct address* addr,
+    struct chat_state* state
+){
+    //"Server" mode, attempts to handshake all connectors and continues when
+    //the first handshake succeeds.
+    struct node local;   
+    fd_set readfds;
+    if(node_listen(&local, addr->port))
+    {
+        chat_push_status(state, "Unable to listen port %d", addr->port);
+        return 1;
+    }
+    FD_ZERO(&readfds);
+    FD_SET(local.socket, &readfds);
+    while(1)
+    {
+        fd_set read_temp=readfds;
+        if(select(local.socket+1, &read_temp, NULL, NULL, NULL)==-1)
+        {
+            if(errno==EINTR)
+            {
+                continue;
+            }
+            chat_push_status(state, "select() failed: %s", strerror(errno));
+            node_close(&local);
+            return 1;
+        }
+        if(!FD_ISSET(local.socket, &read_temp)||
+           node_accept(&local, &state->remote))
+        {
+            continue;
+        }
+        struct key* accepted_key=NULL;
+        if( node_handshake(
+                &state->remote,
+                &state->local_key,
+                &state->remote_key,
+                1,
+                &accepted_key,
+                TIMEOUT_MS
+            )
+        ){
+            struct address remote_addr;
+            node_get_address(&state->remote, &remote_addr);
+            chat_push_status(
+                state,
+                "Failed handshake with %s:%d",
+                remote_addr.node, remote_addr.port
+            );
+            free_address(&remote_addr);
+            node_close(&state->remote);
+        }
+        else
+        {
+            //Handshake succeeded!
+            break;
+        }
+    }
+    node_close(&local);
+    return 0;
+}
+static unsigned active_connect(
+    struct address* addr,
+    struct chat_state* state
+){
+    //"Client" mode, try to connect to the remote
+    fd_set writefds;
+    if(node_connect(&state->remote, addr))
+    {
+        chat_push_status(
+            state,
+            "Connecting to %s:%d\n failed",
+            addr->node, addr->port
+        );
+        return 1;
+    }
+retry_select:
+    FD_ZERO(&writefds);
+    FD_SET(state->remote.socket, &writefds);
+    if(select(state->remote.socket+1, NULL, &writefds, NULL, NULL)==-1)
+    {
+        if(errno==EINTR)
+        {
+            goto retry_select;
+        }
+        chat_push_status(state, "select() failed: %s", strerror(errno));
+        return 1;
+    }
+    struct key* accepted_key=NULL;
+    if( node_handshake(
+            &state->remote,
+            &state->local_key,
+            &state->remote_key,
+            1,
+            &accepted_key,
+            TIMEOUT_MS
+        )
+    ){
+        struct address remote_addr;
+        node_get_address(&state->remote, &remote_addr);
+        chat_push_status(
+            state,
+            "Failed handshake with %s:%d",
+            remote_addr.node, remote_addr.port
+        );
+        free_address(&remote_addr);
+        node_close(&state->remote);
+        return 1;
+    }
+    //Handshake succeeded!
+    return 0;
+}
+static unsigned chat_connect(struct chat_args* a, struct chat_state* state)
+{
+    if(a->wait_for_remote)
+    {
+        chat_push_status(
+            state,
+            "Listening for connection on port %d",
+            a->addr.port
+        );
+        if(passive_connect(&a->addr, state))
+        {
+            return 1;
+        }
+    }
+    else
+    {
+        chat_push_status(
+            state,
+            "Connecting to %s:%d",
+            a->addr.node,
+            a->addr.port
+        );
+        if(active_connect(&a->addr, state))
+        {
+            return 1;
+        }
+    }
+    chat_push_status(state, "Connected!");
+    return 0;
 }
 static void chat_end(struct chat_state* state)
 {
@@ -523,7 +560,7 @@ static unsigned chat_send_block(struct chat_state* state, struct block* b)
     content.size=state->sending.size-MESSAGE_HEADER_SIZE;
     if(encrypt(&state->local_key, &content))
     {
-        fprintf(stderr, "Out of local key data!\n");
+        chat_push_status(state, "Out of local key data!");
         return 1;
     }
     return 0;
@@ -622,7 +659,6 @@ static unsigned chat_handle_message(struct chat_state* state)
     new_message.text.size=state->receiving.size-MESSAGE_HEADER_SIZE;
     chat_push_message(state, &new_message);
     free_block(&state->receiving);
-    chat_update_ui(state);
     return 0;
 }
 static unsigned chat_handle_recv(struct chat_state* state)
@@ -675,7 +711,7 @@ static unsigned chat_handle_recv(struct chat_state* state)
             content.size=state->receiving.size-MESSAGE_HEADER_SIZE;
             if(decrypt(&state->remote_key, &content))
             {
-                fprintf(stderr, "Out of remote key data!\n");
+                chat_push_status(state, "Out of remote key data!");
                 return 1;
             }
             return chat_handle_message(state);
@@ -709,57 +745,76 @@ void chat(struct chat_args* a)
     {
         return;
     }
-    while(state.remote.socket!=-1)
+    unsigned chat_continue=1;
+    while(chat_continue)
     {
-        fd_set read_ready, write_ready;
-        FD_ZERO(&read_ready);
-        FD_SET(state.remote.socket, &read_ready);
-
-        FD_ZERO(&write_ready);
-        if(state.sending.size!=state.sent_size&&state.sending.size!=0)
+        if(state.remote.socket==-1&&chat_connect(a, &state))
         {
-            //There's a message to send
-            FD_SET(state.remote.socket, &write_ready);
-        }
-        else
-        {
-            //No message to send, read one.
-            FD_SET(STDIN_FILENO, &read_ready);
-        }
-        if(
-            select(
-                state.remote.socket+1,
-                &read_ready,
-                &write_ready,
-                NULL,
-                NULL
-            )==-1
-        ){
-            //Resizing the terminal causes select to fail with "Interrupted
-            //system call", so we just update the ui and carry on.
-            chat_update_ui(&state);
+            sleep(1);
             continue;
         }
-        if(FD_ISSET(STDIN_FILENO, &read_ready))
+        while(state.remote.socket!=-1)
         {
-            if(chat_handle_input(&state))
+            fd_set read_ready, write_ready;
+            FD_ZERO(&read_ready);
+            FD_SET(state.remote.socket, &read_ready);
+
+            FD_ZERO(&write_ready);
+            if(state.sending.size!=state.sent_size&&state.sending.size!=0)
             {
+                //There's a message to send
+                FD_SET(state.remote.socket, &write_ready);
+            }
+            else
+            {
+                //No message to send, read one.
+                FD_SET(STDIN_FILENO, &read_ready);
+            }
+            if(
+                select(
+                    state.remote.socket+1,
+                    &read_ready,
+                    &write_ready,
+                    NULL,
+                    NULL
+                )==-1
+            ){
+                //Resizing the terminal causes select to fail with "Interrupted
+                //system call", so we just update the ui and carry on.
+                if(errno==EINTR)
+                {
+                    chat_update_ui(&state);
+                    continue;
+                }
+                chat_continue=0;
                 break;
+            }
+            if(FD_ISSET(STDIN_FILENO, &read_ready))
+            {
+                if(chat_handle_input(&state))
+                {
+                    chat_continue=0;
+                    break;
+                }
+            }
+            if(FD_ISSET(state.remote.socket, &read_ready))
+            {
+                if(chat_handle_recv(&state))
+                {
+                    continue;
+                }
+            }
+            if(FD_ISSET(state.remote.socket, &write_ready))
+            {
+                if(chat_handle_send(&state))
+                {
+                    continue;
+                }
             }
         }
-        if(FD_ISSET(state.remote.socket, &read_ready))
+        if(state.remote.socket==-1)
         {
-            if(chat_handle_recv(&state))
-            {
-                break;
-            }
-        }
-        if(FD_ISSET(state.remote.socket, &write_ready))
-        {
-            if(chat_handle_send(&state))
-            {
-                break;
-            }
+            chat_push_status(&state, "Remote disconnected.");
         }
     }
     chat_end(&state);

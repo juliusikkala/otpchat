@@ -83,7 +83,7 @@ void free_address(struct address* addr)
 }
 void node_close(struct node* n)
 {
-    if(n->socket<0)
+    if(n->socket>0)
     {
         close(n->socket);
         n->socket=-1;
@@ -293,6 +293,7 @@ size_t node_send(
     {
         switch(errno)
         {
+        default:
         case ECONNRESET:
         case ENOTCONN:
             close(remote->socket);
@@ -312,22 +313,13 @@ size_t node_recv(
     size_t size
 ){
     ssize_t received=recv(remote->socket, data, size, 0);
-    if(received==-1)
+    if(received<=0)
     {
-        switch(errno)
-        {
-        case ECONNREFUSED:
-        case ENOTCONN:
-            close(remote->socket);
-            //fallthrough intentional
-        case EBADF:
-        case ENOTSOCK:
-            remote->socket=-1;
-            break;
-        }
+        close(remote->socket);
+        remote->socket=-1;
         return 0;
     }
-    return received<0?0:(size_t)received;
+    return (size_t)received;
 }
 unsigned node_exchange(
     struct node* remote,
@@ -378,6 +370,10 @@ unsigned node_exchange(
             )==-1
         )
         {
+            if(errno==EINTR)
+            {
+                continue;
+            }
             return 1;
         }
         gettimeofday(&end_tv, NULL);
