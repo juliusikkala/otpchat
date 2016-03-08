@@ -82,7 +82,7 @@ unsigned create_key(const char* path, struct key* k, size_t sz)
 
     int urandom=open("/dev/urandom", O_RDONLY);
     //Generate random id
-    read(urandom, &k->id, sizeof(k->id));
+    (void)read(urandom, &k->id, sizeof(k->id));
     //Write id
     fwrite(&k->id, 1, sizeof(k->id), k->stream);
 

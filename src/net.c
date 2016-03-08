@@ -97,20 +97,28 @@ void node_close(struct node* n)
 void node_get_address(struct node* n, struct address* addr)
 {
     addr->node=(char*)malloc(INET6_ADDRSTRLEN);
-    inet_ntop(
-        n->info->ai_family,
-        n->info->ai_addr,
-        addr->node,
-        INET6_ADDRSTRLEN
-    );
 
     if(n->info->ai_addr->sa_family==AF_INET)
     {
-        addr->port=ntohs((((struct sockaddr_in*)n->info->ai_addr)->sin_port));
+        struct sockaddr_in* sa=(struct sockaddr_in*)n->info->ai_addr;
+        inet_ntop(
+            n->info->ai_family,
+            &(sa->sin_addr),
+            addr->node,
+            INET6_ADDRSTRLEN
+        );
+        addr->port=ntohs(sa->sin_port);
     }
     else
     {
-        addr->port=ntohs((((struct sockaddr_in6*)n->info->ai_addr)->sin6_port));
+        struct sockaddr_in6* sa=(struct sockaddr_in6*)n->info->ai_addr;
+        inet_ntop(
+            n->info->ai_family,
+            &(sa->sin6_addr),
+            addr->node,
+            INET6_ADDRSTRLEN
+        );
+        addr->port=ntohs(sa->sin6_port);
     }
 }
 unsigned node_connect(

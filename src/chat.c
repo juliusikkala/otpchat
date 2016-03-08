@@ -520,7 +520,15 @@ static unsigned chat_connect(struct chat_args* a, struct chat_state* state)
             return 1;
         }
     }
-    chat_push_status(state, "Connected!");
+    struct address remote_address;
+    node_get_address(&state->remote, &remote_address);
+    chat_push_status(
+        state,
+        "Connected to %s:%d",
+        remote_address.node,
+        remote_address.port
+    );
+    free_address(&remote_address);
     return 0;
 }
 static void chat_end(struct chat_state* state)
