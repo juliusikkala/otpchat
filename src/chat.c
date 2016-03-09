@@ -66,7 +66,7 @@ struct chat_state
 
     struct message* history;
     size_t history_size;
-    struct message current_message;
+    struct block input;
     size_t cursor_index;
 
     struct block receiving;
@@ -136,9 +136,30 @@ static size_t count_chars(const char* mbs_begin, size_t mbs_len)
     }
     return chars;
 }
-static unsigned chat_message_lines(const struct message* msg, unsigned width)
+static size_t count_bytes(
+    const char* mbs_begin,
+    size_t mbs_len,
+    size_t begin_index,
+    size_t chars
+){
+    mblen(NULL, 0);
+    size_t i=0, j=0;
+    while(i<mbs_len&&j<chars)
+    {
+        int len=mblen(mbs_begin+i, mbs_len-i);
+        if(len<1) break;
+        if(i>=begin_index)
+        {
+            j++;
+        }
+        i+=len;
+    }
+    return i-begin_index;
+}
+static unsigned string_lines(const char* str, size_t strlen, unsigned width)
 {
-    return msg->text.size==0?0:(msg->text.size-1)/width+1;
+    size_t chars=count_chars(str, strlen);
+    return chars==0?0:(chars-1)/width+1;
 }
 static void draw_rect(int x, int y, unsigned w, unsigned h)
 {
@@ -168,8 +189,9 @@ static void chat_draw_message_header(
     mvprintw(y, x, "%s [%s]:", chat_id_name(state, msg->id), date);
     attroff(COLOR_PAIR(msg->id+COLOR_ID_OFFSET));
 }
-static void chat_draw_message_text(
-    struct message* msg,
+static void draw_text_rect(
+    const char* str, size_t strlen,
+    int color_id,
     int x, int y, unsigned width
 ){
     unsigned line=0;
@@ -177,24 +199,26 @@ static void chat_draw_message_text(
     {
         line=-y;
     }
-    unsigned lines=chat_message_lines(msg, width);
+    unsigned lines=string_lines(str, strlen, width);
+    size_t str_offset=0;
     //Move cursor to the wanted position even if the loop below does not
     //execute.
-    attron(COLOR_PAIR(msg->id+COLOR_ID_OFFSET));
+    attron(COLOR_PAIR(color_id));
     draw_rect(x, y+line, width, lines-line==0?1:lines-line);
     move(y, x);
     for(;line<lines;++line)
     {
-        size_t characters_left=msg->text.size-width*line;
+        size_t len=count_bytes(str, strlen, str_offset, width);
         mvprintw(
             y+line,
             x,
-            "%.*s", 
-            characters_left<width?characters_left:width,
-            (char*)msg->text.data+width*line
+            "%.*s",
+            len,
+            str+str_offset
         );
+        str_offset+=len;
     }
-    attroff(COLOR_PAIR(msg->id+COLOR_ID_OFFSET));
+    attroff(COLOR_PAIR(color_id));
 }
 static unsigned chat_draw_key_usage(
     const char* info_text,
@@ -248,7 +272,7 @@ static void chat_update_ui(struct chat_state* state)
 
     int input_line=height;
 
-    int lines=chat_message_lines(&state->current_message, width);
+    int lines=string_lines((char*)state->input.data, state->input.size, width);
     if(lines==0)
     {
         lines=1;
@@ -259,7 +283,11 @@ static void chat_update_ui(struct chat_state* state)
     //Print past messages
     for(int i=state->history_size-1;i>=0&&history_line>=0;--i)
     {
-        lines=chat_message_lines(&state->history[i], width);
+        lines=string_lines(
+            (char*)state->history[i].text.data,
+            state->history[i].text.size,
+            width
+        );
         history_line-=lines+1;
         chat_draw_message_header(
             state,
@@ -268,9 +296,14 @@ static void chat_update_ui(struct chat_state* state)
             history_line,
             width
         );
-        chat_draw_message_text(&state->history[i], 0, history_line+1, width);
+        draw_text_rect(
+            (char*)state->history[i].text.data,
+            state->history[i].text.size,
+            state->history[i].id+COLOR_ID_OFFSET,
+            0, history_line+1, width
+        );
     }
-    //Print input box
+    //Print margins around input box
     draw_rect(0, input_line, width, 1);
     draw_rect(0, input_line+2, width, 1);
     unsigned local_key_usage_len=chat_draw_key_usage(
@@ -290,10 +323,16 @@ static void chat_update_ui(struct chat_state* state)
             20
         );
     }
-    chat_draw_message_text(&state->current_message, 0, input_line+1, width);
+    //Print input box
+    draw_text_rect(
+        (char*)state->input.data,
+        state->input.size,
+        COLOR_ID_OFFSET+ID_LOCAL,
+        0, input_line+1, width
+    );
     //Move cursor to the correct position
     size_t cursor_pos=count_chars(
-        (char*)state->current_message.text.data,
+        (char*)state->input.data,
         state->cursor_index
     );
     move(input_line+1+cursor_pos/width, cursor_pos%width);
@@ -369,9 +408,8 @@ static unsigned chat_init(struct chat_args* a, struct chat_state* state)
     state->sent_size=0;
     state->history=NULL;
     state->history_size=0;
-    state->current_message.id=ID_LOCAL;
-    state->current_message.text.data=NULL;
-    state->current_message.text.size=0;
+    state->input.data=NULL;
+    state->input.size=0;
     state->cursor_index=0;
 
     setlocale(LC_ALL, "");
@@ -436,7 +474,7 @@ static void chat_end(struct chat_state* state)
     close_key_store(&state->keys);
     free_block(&state->receiving);
     free_block(&state->sending);
-    free_message(&state->current_message);
+    free_block(&state->input);
     for(size_t i=0;i<state->history_size;++i)
     {
         free_message(&state->history[i]);
@@ -475,17 +513,20 @@ static unsigned chat_handle_input(struct chat_state* state)
     int c=getch();
     if(c=='\n')
     {//Newline sends the message.
-        if(state->current_message.text.size==0
-         ||state->remote.state==NOT_CONNECTED)
+        if(state->input.size==0||state->remote.state==NOT_CONNECTED)
         {
             return 0;
         }
-        unsigned fail=chat_send_block(state, &state->current_message.text);
-        state->current_message.timestamp=time(NULL);
-        chat_push_message(state, &state->current_message);
+        struct message msg;
+        msg.text.data=state->input.data;
+        msg.text.size=state->input.size;
+        msg.id=ID_LOCAL;
+        msg.timestamp=time(NULL);
 
-        free_message(&state->current_message);
-        state->current_message.id=ID_LOCAL;
+        chat_push_message(state, &msg);
+        unsigned fail=chat_send_block(state, &msg.text);
+
+        free_block(&state->input);
         state->cursor_index=0;
         if(fail)
         {
@@ -494,54 +535,52 @@ static unsigned chat_handle_input(struct chat_state* state)
     }
     else if(c<256)
     {//Not newline, message continues.
-        state->current_message.text.data=(uint8_t*)realloc(
-            state->current_message.text.data,
-            state->current_message.text.size+1
+        state->input.data=(uint8_t*)realloc(
+            state->input.data,
+            state->input.size+1
         );
         memmove(
-            state->current_message.text.data+state->cursor_index+1,
-            state->current_message.text.data+state->cursor_index,
-            state->current_message.text.size-state->cursor_index
+            state->input.data+state->cursor_index+1,
+            state->input.data+state->cursor_index,
+            state->input.size-state->cursor_index
         );
-        state->current_message.text.data[
-            state->cursor_index
-        ]=(uint8_t)c;
-        state->current_message.text.size++;
+        state->input.data[state->cursor_index]=(uint8_t)c;
+        state->input.size++;
         state->cursor_index++;
     }
     else if(c==KEY_BACKSPACE)
     {//Backspace, remove preceding character
         int offset=prev_char(
-            (char*)state->current_message.text.data,
+            (char*)state->input.data,
             state->cursor_index,
-            state->current_message.text.size
+            state->input.size
         );
         if(offset!=0)
         {
             memmove(
-                state->current_message.text.data+state->cursor_index+offset,
-                state->current_message.text.data+state->cursor_index,
-                state->current_message.text.size-state->cursor_index
+                state->input.data+state->cursor_index+offset,
+                state->input.data+state->cursor_index,
+                state->input.size-state->cursor_index
             );
             state->cursor_index+=offset;
-            state->current_message.text.size+=offset;
+            state->input.size+=offset;
         }
     }
     else if(c==KEY_LEFT)
     {//Move one character back
         int offset=prev_char(
-            (char*)state->current_message.text.data,
+            (char*)state->input.data,
             state->cursor_index,
-            state->current_message.text.size
+            state->input.size
         );
         state->cursor_index+=offset;
     }
     else if(c==KEY_RIGHT)
     {//Move one character forwards
         int offset=next_char(
-            (char*)state->current_message.text.data,
+            (char*)state->input.data,
             state->cursor_index,
-            state->current_message.text.size
+            state->input.size
         );
         state->cursor_index+=offset;
     }
@@ -551,7 +590,7 @@ static unsigned chat_handle_input(struct chat_state* state)
     }
     else if(c==KEY_END)
     {
-        state->cursor_index=state->current_message.text.size;
+        state->cursor_index=state->input.size;
     }
     chat_update_ui(state);
     return 0;
