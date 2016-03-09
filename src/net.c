@@ -37,7 +37,6 @@ SOFTWARE.
 #include <netinet/in.h>
 #include <netdb.h>
 #include <unistd.h>
-#define PROTOCOL_ID "OTPCHAT0"
 
 unsigned parse_address(const char* text, struct address* addr)
 {
@@ -93,6 +92,24 @@ void node_close(struct node* n)
         freeaddrinfo(n->info);
         n->info=NULL;
     }
+}
+unsigned node_error(struct node* n)
+{
+    if(n->socket==-1)
+    {
+        return ENOTSOCK;
+    }
+    int err=0;
+    socklen_t sz=sizeof(err);
+    if(getsockopt(n->socket, SOL_SOCKET, SO_ERROR, &err, &sz)==-1)
+    {
+        return errno;
+    }
+    if(err!=0&&err!=EINPROGRESS)
+    {
+        return err;
+    }
+    return 0;
 }
 void node_get_address(struct node* n, struct address* addr)
 {
@@ -157,7 +174,7 @@ unsigned node_connect(
             remote->socket,
             remote->info->ai_addr,
             remote->info->ai_addrlen
-        )==-1&&errno!=EINPROGRESS
+        )!=0&&errno!=EINPROGRESS
     ){
         close(remote->socket);
         freeaddrinfo(remote->info);
@@ -228,68 +245,6 @@ unsigned node_accept(
     fcntl(remote->socket, F_SETFL, O_NONBLOCK);
     return 0;
 }
-
-unsigned node_handshake(
-    struct node* remote,
-    struct key* local_key,
-    struct key* remote_keys,
-    size_t remote_keys_sz,
-    struct key** selected_remote_key,
-    unsigned timeout_ms
-){
-    uint8_t send_message[8+sizeof(local_key->id)]={0};
-    uint8_t recv_message[8+sizeof(local_key->id)]={0};
-    memcpy(send_message, PROTOCOL_ID, 8);
-    memcpy(send_message+8, local_key->id, sizeof(local_key->id));
-
-    if( node_exchange(
-            remote,
-            send_message,
-            sizeof(send_message),
-            recv_message,
-            sizeof(recv_message),
-            &timeout_ms
-        )
-    ){
-        return 4;
-    }
-    if(memcmp(recv_message, PROTOCOL_ID, 8)!=0)
-    {
-        return 1;
-    }
-    *selected_remote_key=NULL;
-    for(size_t i=0;i<remote_keys_sz;++i)
-    {
-        if(memcmp(remote_keys[i].id, recv_message+8, sizeof(local_key->id))==0)
-        {
-            *selected_remote_key=&remote_keys[i];
-            break;
-        }
-    }
-    uint8_t local_accept=*selected_remote_key!=NULL;
-    uint8_t remote_accept=0;
-    if( node_exchange(
-            remote,
-            &local_accept,
-            1,
-            &remote_accept,
-            1,
-            &timeout_ms
-        )
-    ){
-        return 4;
-    }
-    if(!remote_accept)
-    {
-        return 2;
-    }
-    if(!local_accept)
-    {
-        return 3;
-    }
-    return 0;
-}
-
 
 size_t node_send(
     struct node* remote,

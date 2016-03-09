@@ -109,19 +109,86 @@ unsigned create_key(const char* path, struct key* k, size_t sz)
 }
 void close_key(struct key* k)
 {
-    //Save head index
-    size_t head_le=htole64(k->head);
-    fseek(k->stream, KEY_HEAD_OFFSET, SEEK_SET);
-    fwrite(&head_le, sizeof(&head_le), 1, k->stream);
-    //Close stream
-    fclose(k->stream);
-    k->stream=NULL;
+    if(k->stream!=NULL)
+    {
+        //Save head index
+        size_t head_le=htole64(k->head);
+        fseek(k->stream, KEY_HEAD_OFFSET, SEEK_SET);
+        fwrite(&head_le, sizeof(&head_le), 1, k->stream);
+        //Close stream
+        fclose(k->stream);
+        k->stream=NULL;
+    }
 }
 void seek_key(struct key* k, uint64_t new_head)
 {
     fseek(k->stream, new_head+KEY_DATA_OFFSET, SEEK_SET);
     k->head=new_head;
 }
+void init_key_store(struct key_store* store)
+{
+    store->local.stream=NULL;
+    store->remotes=NULL;
+    store->remotes_size=0;
+}
+void close_key_store(struct key_store* store)
+{
+    close_key(&store->local);
+    if(store->remotes!=NULL)
+    {
+        size_t i=0;
+        for(i=0;i<store->remotes_size;++i)
+        {
+            close_key(store->remotes+i);
+        }
+        free(store->remotes);
+        store->remotes=NULL;
+    }
+}
+unsigned key_store_open_local(
+    struct key_store* store,
+    const char* local_path
+){
+    close_key(&store->local);
+    if(open_key(local_path, &store->local))
+    {
+        return 1;
+    }
+    return 0;
+}
+unsigned key_store_open_remote(
+    struct key_store* store,
+    const char* remote_path
+){
+    struct key remote;
+    if(open_key(remote_path, &remote))
+    {
+        return 1;
+    }
+    store->remotes=(struct key*)realloc(
+        store->remotes,
+        sizeof(struct key)*++store->remotes_size
+    );
+    memcpy(&store->remotes[store->remotes_size-1], &remote, sizeof(struct key));
+    return 0;
+}
+struct key* key_store_find(struct key_store* store, uint8_t* id)
+{
+    size_t i=0;
+    for(i=0;i<store->remotes_size;++i)
+    {
+        if( memcmp(
+                store->remotes[i].id,
+                id,
+                sizeof(store->remotes[i].id)
+            )==0
+        ){
+            return store->remotes+i;
+        }
+    }
+    return NULL;
+}
+
 
 void create_block_from_str(const char* str, struct block* b)
 {

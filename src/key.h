@@ -38,6 +38,24 @@ SOFTWARE.
     void close_key(struct key* k);
     void seek_key(struct key* k, uint64_t new_head);
 
+    struct key_store
+    {
+        struct key local;
+        struct key* remotes;
+        size_t remotes_size;
+    };
+    void init_key_store(struct key_store* store);
+    void close_key_store(struct key_store* store);
+    unsigned key_store_open_local(
+        struct key_store* store,
+        const char* local_path
+    );
+    unsigned key_store_open_remote(
+        struct key_store* store,
+        const char* remote_path
+    );
+    struct key* key_store_find(struct key_store* store, uint8_t* id);
+
     struct block
     {
         uint8_t* data;

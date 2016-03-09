@@ -48,6 +48,8 @@ SOFTWARE.
     };
 
     void node_close(struct node* n);
+    unsigned node_error(struct node* n);
+
     void node_get_address(struct node* n, struct address* addr);
     //Returns non-zero on failure.
     //On success, the connection is being formed asynchronously.
