@@ -28,6 +28,7 @@ SOFTWARE.
 #include "net.h"
 #include "user.h"
 #include <stdio.h>
+#include <math.h>
 #include <stdlib.h>
 #include <time.h>
 #include <ncurses.h>
@@ -47,6 +48,7 @@ SOFTWARE.
 #define COLOR_KEY_USED  1
 #define COLOR_KEY_LEFT  2
 #define COLOR_ID_OFFSET 3
+#define COLOR_SCROLLBAR (COLOR_ID_OFFSET+ID_LOCAL)
 
 struct message
 {
@@ -66,6 +68,9 @@ struct chat_state
 
     struct message* history;
     size_t history_size;
+    size_t history_line;
+    int history_width, history_height;//width and height of the history box
+
     struct block input;
     size_t cursor_index;
 
@@ -161,10 +166,25 @@ static unsigned string_lines(const char* str, size_t strlen, unsigned width)
     size_t chars=count_chars(str, strlen);
     return chars==0?0:(chars-1)/width+1;
 }
+static unsigned chat_message_lines(struct message* msg, unsigned width)
+{
+    return 1+string_lines((char*)msg->text.data, msg->text.size, width);
+}
+static unsigned count_history_lines(struct chat_state* state)
+{
+    unsigned lines=0;
+    size_t i=0;
+    for(i=0;i<state->history_size;++i)
+    {
+        lines+=chat_message_lines(state->history+i, state->history_width);
+    }
+    return lines;
+}
 static void draw_rect(int x, int y, unsigned w, unsigned h)
 {
     for(unsigned i=0;i<h;++i)
     {
+        if(y+(int)i<0) continue;
         move(y+i, x);
         for(unsigned j=0;j<w;++j)
         {
@@ -177,6 +197,7 @@ static void chat_draw_message_header(
     struct message* msg,
     int x, int y, int width
 ){
+    if(y<0) return;
     char date[9];
     strftime(
         date,
@@ -195,30 +216,74 @@ static void draw_text_rect(
     int x, int y, unsigned width
 ){
     unsigned line=0;
-    if(y<0)
-    {
-        line=-y;
-    }
     unsigned lines=string_lines(str, strlen, width);
     size_t str_offset=0;
-    //Move cursor to the wanted position even if the loop below does not
-    //execute.
     attron(COLOR_PAIR(color_id));
     draw_rect(x, y+line, width, lines-line==0?1:lines-line);
+    //Move cursor to the wanted position even if the loop below does not
+    //execute.
     move(y, x);
     for(;line<lines;++line)
     {
         size_t len=count_bytes(str, strlen, str_offset, width);
-        mvprintw(
-            y+line,
-            x,
-            "%.*s",
-            len,
-            str+str_offset
-        );
+        if(y+(int)line>=0)
+        {
+            mvprintw(
+                y+line,
+                x,
+                "%.*s",
+                len,
+                str+str_offset
+            );
+        }
         str_offset+=len;
     }
     attroff(COLOR_PAIR(color_id));
+}
+static void chat_draw_history(
+    struct chat_state* state,
+    int x, int y
+){
+    int line=y+state->history_height+state->history_line;
+    for(int i=state->history_size-1;i>=0&&line>=0;--i)
+    {
+        unsigned msg_lines=chat_message_lines(
+            state->history+i,
+            state->history_width
+        );
+        line-=msg_lines;
+        if(line>y+state->history_height)
+        {
+            continue;
+        }
+        chat_draw_message_header(
+            state,
+            &state->history[i],
+            x,
+            line,
+            state->history_width
+        );
+        draw_text_rect(
+            (char*)state->history[i].text.data,
+            state->history[i].text.size,
+            state->history[i].id+COLOR_ID_OFFSET,
+            x, line+1, state->history_width
+        );
+    }
+}
+static void chat_draw_scrollbar(
+    int x, int y,
+    unsigned content_h,
+    unsigned content_offset,
+    unsigned displayed_h
+){
+    float bar_ratio_height=displayed_h/(float)content_h;
+    float bar_ratio_top=((int)content_offset-displayed_h)/(float)content_h;
+    int bar_height=(int)(displayed_h*bar_ratio_height)+1;
+    int bar_top=displayed_h*bar_ratio_top;
+    attron(COLOR_PAIR(COLOR_SCROLLBAR));
+    draw_rect(x, y+bar_top, 1, bar_height);
+    attroff(COLOR_PAIR(COLOR_SCROLLBAR));
 }
 static unsigned chat_draw_key_usage(
     const char* info_text,
@@ -279,30 +344,22 @@ static void chat_update_ui(struct chat_state* state)
     }
     input_line-=lines+2;
 
-    int history_line=input_line;
-    //Print past messages
-    for(int i=state->history_size-1;i>=0&&history_line>=0;--i)
+    state->history_width=width;
+    state->history_height=height-lines-2;
+    unsigned history_lines=count_history_lines(state);
+    if(history_lines>(unsigned)state->history_height)
     {
-        lines=string_lines(
-            (char*)state->history[i].text.data,
-            state->history[i].text.size,
-            width
-        );
-        history_line-=lines+1;
-        chat_draw_message_header(
-            state,
-            &state->history[i],
-            0,
-            history_line,
-            width
-        );
-        draw_text_rect(
-            (char*)state->history[i].text.data,
-            state->history[i].text.size,
-            state->history[i].id+COLOR_ID_OFFSET,
-            0, history_line+1, width
+        state->history_width-=1;//Make room for scrollbar
+        history_lines=count_history_lines(state);
+        //Draw scrollbar
+        chat_draw_scrollbar(
+            width-1, 0,
+            history_lines,
+            history_lines-state->history_line,
+            state->history_height
         );
     }
+    chat_draw_history(state, 0, 0);
     //Print margins around input box
     draw_rect(0, input_line, width, 1);
     draw_rect(0, input_line+2, width, 1);
@@ -353,6 +410,14 @@ static void chat_push_message(
     new_msg->text.data=(uint8_t*)malloc(msg->text.size);
     memcpy(new_msg->text.data, msg->text.data, msg->text.size);
 
+    if(state->history_line!=0)
+    {
+        int width, height;
+        getmaxyx(stdscr, height, width);
+        (void)height;//Stop the compiler from complaining
+        state->history_line+=chat_message_lines(new_msg, width);
+    }
+
     chat_update_ui(state);
 }
 static void chat_push_status(
@@ -364,22 +429,16 @@ static void chat_push_status(
     va_start(args, format);
     va_copy(args_copy, args);
 
-    state->history=(struct message*)realloc(
-        state->history,
-        (++state->history_size)*sizeof(struct message)
-    );
-
-    struct message* new_msg=&state->history[state->history_size-1];
-    new_msg->id=ID_STATUS;
-    new_msg->timestamp=time(NULL);
-    new_msg->text.size=vsnprintf(NULL, 0, format, args_copy);
-    new_msg->text.data=(uint8_t*)malloc(new_msg->text.size+1);
-    vsprintf((char*)new_msg->text.data, format, args);
-
+    struct message status;
+    status.id=ID_STATUS;
+    status.timestamp=time(NULL);
+    status.text.size=vsnprintf(NULL, 0, format, args_copy);
+    status.text.data=(uint8_t*)malloc(status.text.size+1);
+    vsprintf((char*)status.text.data, format, args);
+    chat_push_message(state, &status);
+    free_message(&status);
     va_end(args);
     va_end(args_copy);
-
-    chat_update_ui(state);
 }
 static unsigned chat_init(struct chat_args* a, struct chat_state* state)
 {
@@ -408,6 +467,7 @@ static unsigned chat_init(struct chat_args* a, struct chat_state* state)
     state->sent_size=0;
     state->history=NULL;
     state->history_size=0;
+    state->history_line=0;
     state->input.data=NULL;
     state->input.size=0;
     state->cursor_index=0;
@@ -583,6 +643,21 @@ static unsigned chat_handle_input(struct chat_state* state)
             state->input.size
         );
         state->cursor_index+=offset;
+    }
+    else if(c==KEY_UP)
+    {
+        unsigned lines=count_history_lines(state);
+        if(state->history_line+state->history_height<lines)
+        {
+            state->history_line++;
+        }
+    }
+    else if(c==KEY_DOWN)
+    {
+        if(state->history_line>0)
+        {
+            state->history_line--;
+        }
     }
     else if(c==KEY_HOME)
     {
