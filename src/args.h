@@ -25,7 +25,7 @@ SOFTWARE.
 #define OTPCHAT_ARGS_H_
     #include <stddef.h>
     #include <stdint.h>
-    #include "net.h"
+    #include "address.h"
 
     struct generate_args
     {
@@ -56,6 +56,6 @@ SOFTWARE.
             struct generate_args generate;
         } mode_args;
     };
-    unsigned parse_args(int argc, char** argv, struct args* a);
+    unsigned parse_args(struct args* a, int argc, char** argv);
     void free_args(struct args* a);
 #endif

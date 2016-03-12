@@ -23,6 +23,7 @@ SOFTWARE.
 */
 #define _DEFAULT_SOURCE
 #include "key.h"
+#include "block.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,7 +39,7 @@ SOFTWARE.
 #define KEY_DATA_OFFSET 32
 #define BUFFER_SIZE 4096
 
-unsigned open_key(const char* path, struct key* k)
+unsigned key_open(struct key* k, const char* path)
 {
     k->stream=fopen(path, "rb+");
     if(k->stream==NULL)
@@ -67,7 +68,7 @@ unsigned open_key(const char* path, struct key* k)
     }
     return 0;
 }
-unsigned create_key(const char* path, struct key* k, size_t sz)
+unsigned key_create(struct key* k, const char* path, size_t sz)
 {
     k->stream=fopen(path, "wb+");
     if(k->stream==NULL)
@@ -107,7 +108,7 @@ unsigned create_key(const char* path, struct key* k, size_t sz)
     k->size=sz;
     return 0;
 }
-void close_key(struct key* k)
+void key_close(struct key* k)
 {
     if(k->stream!=NULL)
     {
@@ -120,26 +121,26 @@ void close_key(struct key* k)
         k->stream=NULL;
     }
 }
-void seek_key(struct key* k, uint64_t new_head)
+void key_seek(struct key* k, uint64_t new_head)
 {
     fseek(k->stream, new_head+KEY_DATA_OFFSET, SEEK_SET);
     k->head=new_head;
 }
-void init_key_store(struct key_store* store)
+void key_store_init(struct key_store* store)
 {
     store->local.stream=NULL;
     store->remotes=NULL;
     store->remotes_size=0;
 }
-void close_key_store(struct key_store* store)
+void key_store_close(struct key_store* store)
 {
-    close_key(&store->local);
+    key_close(&store->local);
     if(store->remotes!=NULL)
     {
         size_t i=0;
         for(i=0;i<store->remotes_size;++i)
         {
-            close_key(store->remotes+i);
+            key_close(store->remotes+i);
         }
         free(store->remotes);
         store->remotes=NULL;
@@ -149,8 +150,8 @@ unsigned key_store_open_local(
     struct key_store* store,
     const char* local_path
 ){
-    close_key(&store->local);
-    if(open_key(local_path, &store->local))
+    key_close(&store->local);
+    if(key_open(&store->local, local_path))
     {
         return 1;
     }
@@ -161,7 +162,7 @@ unsigned key_store_open_remote(
     const char* remote_path
 ){
     struct key remote;
-    if(open_key(remote_path, &remote))
+    if(key_open(&remote, remote_path))
     {
         return 1;
     }
@@ -189,28 +190,7 @@ struct key* key_store_find(struct key_store* store, uint8_t* id)
     return NULL;
 }
 
-
-void create_block_from_str(const char* str, struct block* b)
-{
-    b->size=strlen(str);
-    b->data=(uint8_t*)malloc(b->size);
-    memcpy(b->data, str, b->size);
-}
-void create_block(size_t size, struct block* b)
-{
-    b->size=size;
-    b->data=(uint8_t*)calloc(b->size, 1);
-}
-void free_block(struct block* b)
-{
-    if(b->data!=NULL)
-    {
-        free(b->data);
-        b->data=NULL;
-        b->size=0;
-    }
-}
-static unsigned get_key_block(
+static unsigned key_get_block(
     struct key* k,
     struct block* key_block,
     uint64_t bytes
@@ -232,7 +212,7 @@ unsigned encrypt(
     struct block* message
 ){
     struct block key_block;
-    if(get_key_block(k, &key_block, message->size))
+    if(key_get_block(k, &key_block, message->size))
     {//There's not enough key data
         return 1;
     }

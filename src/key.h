@@ -33,10 +33,10 @@ SOFTWARE.
         uint8_t id[16];
         uint64_t head;
     };
-    unsigned open_key(const char* path, struct key* k);
-    unsigned create_key(const char* path, struct key* k, size_t sz);
-    void close_key(struct key* k);
-    void seek_key(struct key* k, uint64_t new_head);
+    unsigned key_open(struct key* k, const char* path);
+    unsigned key_create(struct key* k, const char* path, size_t sz);
+    void key_close(struct key* k);
+    void key_seek(struct key* k, uint64_t new_head);
 
     struct key_store
     {
@@ -44,8 +44,8 @@ SOFTWARE.
         struct key* remotes;
         size_t remotes_size;
     };
-    void init_key_store(struct key_store* store);
-    void close_key_store(struct key_store* store);
+    void key_store_init(struct key_store* store);
+    void key_store_close(struct key_store* store);
     unsigned key_store_open_local(
         struct key_store* store,
         const char* local_path
@@ -56,14 +56,7 @@ SOFTWARE.
     );
     struct key* key_store_find(struct key_store* store, uint8_t* id);
 
-    struct block
-    {
-        uint8_t* data;
-        size_t size;
-    };
-    void create_block_from_str(const char* str, struct block* b);
-    void create_block(size_t size, struct block* b);
-    void free_block(struct block* b);
+    struct block;
     unsigned encrypt(
         struct key* k,
         struct block* message

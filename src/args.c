@@ -91,7 +91,7 @@ static unsigned parse_chat_args(
         if(*endptr!='\0')
         {
             //Not a port, is it an address?
-            if(parse_address(argv[2], &a->addr))
+            if(parse_address(&a->addr, argv[2]))
             {
                 return 1;
             }
@@ -117,7 +117,7 @@ static unsigned parse_chat_args(
     a->remote_key_path=copy_string(argv[1]);
     return 0;
 }
-unsigned parse_args(int argc, char** argv, struct args* a)
+unsigned parse_args(struct args* a, int argc, char** argv)
 {
     if(argc>=2&&strcmp(argv[1], "--generate")==0)
     {

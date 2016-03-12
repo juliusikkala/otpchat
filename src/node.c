@@ -22,7 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 #define _DEFAULT_SOURCE
-#include "net.h"
+#include "node.h"
+#include "address.h"
 #include "key.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -38,48 +39,6 @@ SOFTWARE.
 #include <netdb.h>
 #include <unistd.h>
 
-unsigned parse_address(const char* text, struct address* addr)
-{
-    //Find last ':'
-    const char* separator=strrchr(text, ':');
-    if(separator==NULL)
-    {
-        //No separator, so port is unspecified.
-        size_t len=strlen(text);
-        addr->node=(char*)malloc(len+1);
-        memcpy(addr->node, text, len);
-        addr->port=0;
-        return 0;
-    }
-    //Read node name
-    size_t len=separator-text;
-    if(len==0)
-    {
-        return 1;
-    }
-    addr->node=(char*)malloc(len+1);
-    memcpy(addr->node, text, len);
-    addr->node[separator-text]=0;
-    //Read port number
-    char* port_end=NULL;
-    long int port=strtol(separator+1, &port_end, 0);
-    if(port<=0||port>=(1<<16)||*port_end!=0)
-    {
-        free(addr->node);
-        return 1;
-    }
-    addr->port=port;
-    return 0;
-}
-void free_address(struct address* addr)
-{
-    if(addr->node!=NULL)
-    {
-        free(addr->node);
-        addr->node=NULL;
-    }
-    addr->port=0;
-}
 void node_close(struct node* n)
 {
     if(n->socket>0)

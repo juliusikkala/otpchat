@@ -52,11 +52,16 @@ include_directories(
 )
 
 file(GLOB SRC_C 
-    src/main.c
-    src/key.c
+    src/address.c
     src/args.c
-    src/net.c
+    src/block.c
     src/chat.c
+    src/command.c
+    src/key.c
+    src/main.c
+    src/message.c
+    src/node.c
+    src/ui.c
     src/user.c
 )
 

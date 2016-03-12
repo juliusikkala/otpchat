@@ -31,6 +31,7 @@ void user_init(struct user* u, uint32_t id)
 {
     u->key=NULL;
     u->node.socket=-1;
+    u->node.info=NULL;
     u->name=NULL;
     u->state=NOT_CONNECTED;
     u->id=id;
@@ -120,8 +121,8 @@ unsigned user_finish_connect(
     return 0;
 }
 unsigned user_accept(
-    struct node* listen_node,
     struct user* u,
+    struct node* listen_node,
     struct key_store* keys
 ){
     if(node_accept(listen_node, &u->node))

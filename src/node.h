@@ -21,26 +21,13 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-#ifndef OTPCHAT_NET_H_
-#define OTPCHAT_NET_H_
+#ifndef OTPCHAT_NODE_H_
+#define OTPCHAT_NODE_H_
     #include <stdint.h>
     #include <sys/types.h>
     #include <sys/socket.h>
     #include <netdb.h>
-    struct address
-    {
-        char* node;
-        uint16_t port;
-    };
-    //Parses an address of form node:port. Returns non-zero on failure.
-    //If the port is unspecified, it will be set to 0
-    unsigned parse_address(
-        const char* text,
-        struct address* addr
-    );
-    void free_address(struct address* addr);
 
-    struct key;
     struct node
     {
         struct addrinfo* info;
@@ -50,6 +37,7 @@ SOFTWARE.
     void node_close(struct node* n);
     unsigned node_error(struct node* n);
 
+    struct address;
     void node_get_address(struct node* n, struct address* addr);
     //Returns non-zero on failure.
     //On success, the connection is being formed asynchronously.
@@ -67,19 +55,6 @@ SOFTWARE.
     unsigned node_accept(
         struct node* local,
         struct node* remote
-    );
-    //Returns non-zero on failure.
-    //1 - Protocol mismatch
-    //2 - Local key not recognized by remote
-    //3 - Remote key not recognized
-    //4 - Timed out
-    unsigned node_handshake(
-        struct node* remote,
-        struct key* local_key,
-        struct key* remote_keys,
-        size_t remote_keys_sz,
-        struct key** selected_remote_key,
-        unsigned timeout_ms
     );
 
     //Returns the number of bytes sent.

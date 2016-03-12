@@ -24,5 +24,44 @@ SOFTWARE.
 #ifndef OTPCHAT_CHAT_H_
 #define OTPCHAT_CHAT_H_
     #include "args.h"
+    #include "key.h"
+    #include "user.h"
+    #include "message.h"
+    #include "block.h"
+    #include <stdlib.h>
+
+    struct chat_state
+    {
+        struct key_store keys;
+        struct user local, remote;
+
+        struct message* history;
+        size_t history_size;
+        size_t history_line;
+        int history_width, history_height;//width and height of the history box
+
+        struct block input;
+        size_t cursor_index;
+
+        struct block receiving;
+        size_t received_size;
+
+        struct block sending;
+        size_t sent_size;
+
+        unsigned running;
+    };
+
+    const char* chat_id_name(struct chat_state* state, uint32_t id);
+    void chat_push_message(
+        struct chat_state* state,
+        const struct message* msg
+    );
+    void chat_push_status(
+        struct chat_state* state,
+        const char* format,
+        ...
+    );
+    unsigned chat_begin_send(struct chat_state* state, struct block* b);
     void chat(struct chat_args* a);
 #endif

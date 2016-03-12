@@ -21,45 +21,18 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-#include <stdio.h>
-#include "key.h"
-#include "args.h"
-#include "chat.h"
+#ifndef OTPCHAT_BLOCK_H_
+#define OTPCHAT_BLOCK_H_
+    #include <stdint.h>
+    #include <stddef.h>
 
-void print_usage(const char* name)
-{
-    fprintf(
-        stderr,
-        "Usage: %s <local-key> <remote-key> [<address>[:<port>]]\n"
-        "       %s --generate <size> <new-key-file>\n",
-        name, name
-    );
-}
-void generate(struct generate_args* a)
-{
-    struct key new_key;
-    key_create(&new_key, a->key_path, a->key_size);
-    key_close(&new_key);
-}
-int main(int argc, char** argv)
-{
-    struct args args;
-    if(parse_args(&args, argc, argv))
+    struct block
     {
-        print_usage(argv[0]);
-        return 1;
-    }
-    switch(args.mode)
-    {
-    case MODE_CHAT:
-        chat(&args.mode_args.chat);
-        break;
-    case MODE_GENERATE:
-        generate(&args.mode_args.generate);
-        break;
-    default:
-        break;
-    }
-    free_args(&args);
-    return 0;
-}
+        uint8_t* data;
+        size_t size;
+    };
+    void block_create_from_str(struct block* b, const char* str);
+    void block_create(struct block* b, size_t size);
+    void block_clone(struct block* dst, const struct block* src);
+    void free_block(struct block* b);
+#endif

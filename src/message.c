@@ -21,45 +21,36 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-#include <stdio.h>
-#include "key.h"
-#include "args.h"
-#include "chat.h"
+#include "message.h"
 
-void print_usage(const char* name)
+void message_create(struct message* msg, uint32_t id)
 {
-    fprintf(
-        stderr,
-        "Usage: %s <local-key> <remote-key> [<address>[:<port>]]\n"
-        "       %s --generate <size> <new-key-file>\n",
-        name, name
-    );
+    msg->id=id;
+    msg->timestamp=time(NULL);
+    msg->text.size=0;
+    msg->text.data=NULL;
 }
-void generate(struct generate_args* a)
-{
-    struct key new_key;
-    key_create(&new_key, a->key_path, a->key_size);
-    key_close(&new_key);
+void message_create_from_str(
+    struct message* msg,
+    uint32_t id,
+    const char* str
+){
+    msg->id=id;
+    msg->timestamp=time(NULL);
+    block_create_from_str(&msg->text, str);
 }
-int main(int argc, char** argv)
+void message_create_from_block(
+    struct message* msg,
+    uint32_t id,
+    const struct block* text
+){
+    msg->id=id;
+    msg->timestamp=time(NULL);
+    block_clone(&msg->text, text);
+}
+void free_message(struct message* msg)
 {
-    struct args args;
-    if(parse_args(&args, argc, argv))
-    {
-        print_usage(argv[0]);
-        return 1;
-    }
-    switch(args.mode)
-    {
-    case MODE_CHAT:
-        chat(&args.mode_args.chat);
-        break;
-    case MODE_GENERATE:
-        generate(&args.mode_args.generate);
-        break;
-    default:
-        break;
-    }
-    free_args(&args);
-    return 0;
+    free_block(&msg->text);
+    msg->timestamp=0;
+    msg->id=0;
 }

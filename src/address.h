@@ -21,45 +21,19 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-#include <stdio.h>
-#include "key.h"
-#include "args.h"
-#include "chat.h"
-
-void print_usage(const char* name)
-{
-    fprintf(
-        stderr,
-        "Usage: %s <local-key> <remote-key> [<address>[:<port>]]\n"
-        "       %s --generate <size> <new-key-file>\n",
-        name, name
+#ifndef OTPCHAT_ADDRESS_H_
+#define OTPCHAT_ADDRESS_H_
+    #include <stdint.h>
+    struct address
+    {
+        char* node;
+        uint16_t port;
+    };
+    //Parses an address of form node:port. Returns non-zero on failure.
+    //If the port is unspecified, it will be set to 0
+    unsigned parse_address(
+        struct address* addr,
+        const char* text
     );
-}
-void generate(struct generate_args* a)
-{
-    struct key new_key;
-    key_create(&new_key, a->key_path, a->key_size);
-    key_close(&new_key);
-}
-int main(int argc, char** argv)
-{
-    struct args args;
-    if(parse_args(&args, argc, argv))
-    {
-        print_usage(argv[0]);
-        return 1;
-    }
-    switch(args.mode)
-    {
-    case MODE_CHAT:
-        chat(&args.mode_args.chat);
-        break;
-    case MODE_GENERATE:
-        generate(&args.mode_args.generate);
-        break;
-    default:
-        break;
-    }
-    free_args(&args);
-    return 0;
-}
+    void free_address(struct address* addr);
+#endif

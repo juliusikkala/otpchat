@@ -24,7 +24,11 @@ SOFTWARE.
 #ifndef OTPCHAT_USER_H_
 #define OTPCHAT_USER_H_
     #include "key.h"
-    #include "net.h"
+    #include "node.h"
+    #define ID_STATUS  0
+    #define ID_LOCAL  1
+    #define ID_REMOTE 2
+
     enum connection_state
     {
         NOT_CONNECTED=0,
@@ -47,8 +51,8 @@ SOFTWARE.
         struct key_store* keys
     );
     unsigned user_accept(
-        struct node* listen_node,
         struct user* u,
+        struct node* listen_node,
         struct key_store* keys
     );
     void user_disconnect(struct user* u);

@@ -21,45 +21,33 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-#include <stdio.h>
-#include "key.h"
-#include "args.h"
-#include "chat.h"
+#include "block.h"
+#include <stdlib.h>
+#include <string.h>
 
-void print_usage(const char* name)
+void block_create_from_str(struct block* b, const char* str)
 {
-    fprintf(
-        stderr,
-        "Usage: %s <local-key> <remote-key> [<address>[:<port>]]\n"
-        "       %s --generate <size> <new-key-file>\n",
-        name, name
-    );
+    b->size=strlen(str);
+    b->data=(uint8_t*)malloc(b->size);
+    memcpy(b->data, str, b->size);
 }
-void generate(struct generate_args* a)
+void block_create(struct block* b, size_t size)
 {
-    struct key new_key;
-    key_create(&new_key, a->key_path, a->key_size);
-    key_close(&new_key);
+    b->size=size;
+    b->data=(uint8_t*)calloc(b->size, 1);
 }
-int main(int argc, char** argv)
+void block_clone(struct block* dst, const struct block* src)
 {
-    struct args args;
-    if(parse_args(&args, argc, argv))
+    dst->size=src->size;
+    dst->data=(uint8_t*)malloc(dst->size);
+    memcpy(dst->data, src->data, dst->size);
+}
+void free_block(struct block* b)
+{
+    if(b->data!=NULL)
     {
-        print_usage(argv[0]);
-        return 1;
+        free(b->data);
+        b->data=NULL;
+        b->size=0;
     }
-    switch(args.mode)
-    {
-    case MODE_CHAT:
-        chat(&args.mode_args.chat);
-        break;
-    case MODE_GENERATE:
-        generate(&args.mode_args.generate);
-        break;
-    default:
-        break;
-    }
-    free_args(&args);
-    return 0;
 }

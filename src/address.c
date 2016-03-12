@@ -21,45 +21,49 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-#include <stdio.h>
-#include "key.h"
-#include "args.h"
-#include "chat.h"
+#include "address.h"
+#include <stdlib.h>
+#include <string.h>
 
-void print_usage(const char* name)
+unsigned parse_address(struct address* addr, const char* text)
 {
-    fprintf(
-        stderr,
-        "Usage: %s <local-key> <remote-key> [<address>[:<port>]]\n"
-        "       %s --generate <size> <new-key-file>\n",
-        name, name
-    );
-}
-void generate(struct generate_args* a)
-{
-    struct key new_key;
-    key_create(&new_key, a->key_path, a->key_size);
-    key_close(&new_key);
-}
-int main(int argc, char** argv)
-{
-    struct args args;
-    if(parse_args(&args, argc, argv))
+    //Find last ':'
+    const char* separator=strrchr(text, ':');
+    if(separator==NULL)
     {
-        print_usage(argv[0]);
+        //No separator, so port is unspecified.
+        size_t len=strlen(text);
+        addr->node=(char*)malloc(len+1);
+        memcpy(addr->node, text, len);
+        addr->port=0;
+        return 0;
+    }
+    //Read node name
+    size_t len=separator-text;
+    if(len==0)
+    {
         return 1;
     }
-    switch(args.mode)
+    addr->node=(char*)malloc(len+1);
+    memcpy(addr->node, text, len);
+    addr->node[separator-text]=0;
+    //Read port number
+    char* port_end=NULL;
+    long int port=strtol(separator+1, &port_end, 0);
+    if(port<=0||port>=(1<<16)||*port_end!=0)
     {
-    case MODE_CHAT:
-        chat(&args.mode_args.chat);
-        break;
-    case MODE_GENERATE:
-        generate(&args.mode_args.generate);
-        break;
-    default:
-        break;
+        free(addr->node);
+        return 1;
     }
-    free_args(&args);
+    addr->port=port;
     return 0;
+}
+void free_address(struct address* addr)
+{
+    if(addr->node!=NULL)
+    {
+        free(addr->node);
+        addr->node=NULL;
+    }
+    addr->port=0;
 }
