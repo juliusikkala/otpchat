@@ -28,6 +28,7 @@ SOFTWARE.
     #include "user.h"
     #include "message.h"
     #include "block.h"
+    #include "address.h"
     #include <stdlib.h>
 
     struct chat_state
@@ -62,6 +63,11 @@ SOFTWARE.
         const char* format,
         ...
     );
+    unsigned chat_begin_connect(struct chat_state* state, struct address* addr);
+    unsigned chat_begin_listen(struct chat_state* state, uint16_t port);
+    void chat_end_listen(struct chat_state* state);
+    void chat_disconnect(struct chat_state* state, uint32_t id);
+
     unsigned chat_begin_send(struct chat_state* state, struct block* b);
     void chat(struct chat_args* a);
 #endif

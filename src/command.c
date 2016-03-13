@@ -25,14 +25,15 @@ SOFTWARE.
 #include "chat.h"
 #include <string.h>
 #include <stdlib.h>
+#define ARG_SEPARATORS " \t"
 
 static char** str_to_argv(const char* str, int* argc)
 {
     char** argv=NULL;
     *argc=0;
-    while(str!=NULL&&*str!=0)
+    while(str!=NULL)
     {
-        const char* end=strchr(str, ' ');
+        const char* end=strpbrk(str, ARG_SEPARATORS);
         size_t len=0;
         if(end!=NULL)
         {
@@ -42,14 +43,21 @@ static char** str_to_argv(const char* str, int* argc)
         {
             len=strlen(str);
         }
-        char* arg=(char*)malloc(len+1);
-        memcpy(arg, str, len);
-        arg[len]=0;
+        if(len!=0)
+        {
+            char* arg=(char*)malloc(len+1);
+            memcpy(arg, str, len);
+            arg[len]=0;
 
-        (*argc)++;
-        argv=(char**)realloc(argv, sizeof(char*)*(*argc));
-        argv[*argc-1]=arg;
-        str=end;
+            (*argc)++;
+            argv=(char**)realloc(argv, sizeof(char*)*(*argc));
+            argv[*argc-1]=arg;
+        }
+        if(end==NULL)
+        {
+            break;
+        }
+        str=end+1;
     }
     return argv;
 }
@@ -64,12 +72,79 @@ static void free_argv(int argc, char** argv)
         free(argv);
     }
 }
+static unsigned command_connect(struct chat_state* state, int argc, char** argv)
+{
+    if(argc!=1)
+    {
+        return 2;
+    }
+    struct address addr;
+    if(parse_address(&addr, argv[0]))
+    {
+        return 2;
+    }
+    if(chat_begin_connect(state, &addr))
+    {
+        return 1;
+    }
+    free_address(&addr);
+    return 0;
+}
+static unsigned command_disconnect(
+    struct chat_state* state,
+    int argc, char** argv
+){
+    (void)argv;
+    if(argc!=0)
+    {
+        return 2;
+    }
+    chat_disconnect(state, ID_REMOTE);
+    return 0;
+}
+static unsigned command_listen(
+    struct chat_state* state,
+    int argc, char** argv
+){
+    unsigned port=DEFAULT_PORT;
+    if(argc==1)
+    {
+        char* port_end=NULL;
+        port=strtol(argv[0], &port_end, 0);   
+        if(port<=0||port>=(1<<16)||*port_end!=0)
+        {
+            return 2;
+        }
+    }
+    else if(argc!=0)
+    {
+        return 2;
+    }
+    if(chat_begin_listen(state, port))
+    {
+        return 1;
+    }
+    return 0;
+}
+static unsigned command_endlisten(
+    struct chat_state* state,
+    int argc, char** argv
+){
+    (void)argv;
+    if(argc!=0)
+    {
+        return 2;
+    }
+    chat_end_listen(state);
+    return 0;
+}
+
 static unsigned command_quit(struct chat_state* state, int argc, char** argv)
 {
     (void)argv;
     if(argc!=0)
     {
-        return 1;
+        return 2;
     }
     state->running=0;
     return 0;
@@ -83,8 +158,10 @@ struct command_table_entry
     command_function fn;
 };
 static const struct command_table_entry command_table[]={
-    //{"connect", command_connect},
-    //{"disconnect", command_disconnect},
+    {"connect", command_connect},
+    {"disconnect", command_disconnect},
+    {"listen", command_listen},
+    {"endlisten", command_endlisten},
     {"quit", command_quit}
 };
 unsigned command_handle(struct chat_state* state, const char* command_str)
@@ -97,8 +174,10 @@ unsigned command_handle(struct chat_state* state, const char* command_str)
     {
         return 0;
     }
-    for(size_t i=0;i<sizeof(command_table)/sizeof(command_table);++i)
-    {
+    for(size_t i=0;
+        i<sizeof(command_table)/sizeof(struct command_table_entry);
+        ++i
+    ){
         if(strcmp(argv[0], command_table[i].command)==0)
         {
             ret=command_table[i].fn(state, argc-1, argv+1);
@@ -106,9 +185,13 @@ unsigned command_handle(struct chat_state* state, const char* command_str)
             break;
         }
     }
-    if(!found)
+    if(ret==2)
     {
-        chat_push_status(state, "Unrecognized command %s", argv[0]);
+        chat_push_status(state, "Malformed command \"%s\"", command_str);
+    }
+    else if(!found)
+    {
+        chat_push_status(state, "Unrecognized command \"%s\"", argv[0]);
         ret=1;
     }
     free_argv(argc, argv);

@@ -48,6 +48,7 @@ void user_set_name(struct user* u, const char* name)
 }
 unsigned user_begin_connect(struct user* u, struct address* addr)
 {
+    user_disconnect(u);
     if(node_connect(&u->node, addr))
     {
         return 1;

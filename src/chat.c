@@ -100,6 +100,63 @@ void chat_push_status(
     va_end(args);
     va_end(args_copy);
 }
+unsigned chat_begin_connect(struct chat_state* state, struct address* addr)
+{
+    if(user_begin_connect(&state->remote, addr))
+    {
+        chat_push_status(
+            state,
+            "Connecting to %s:%d failed",
+            addr->node,
+            addr->port
+        );
+        return 1;
+    }
+    else
+    {
+        chat_push_status(state, "Connecting to %s:%d", addr->node, addr->port);
+    }
+    return 0;
+}
+unsigned chat_begin_listen(struct chat_state* state, uint16_t port)
+{
+    node_close(&state->local.node);
+    if(node_listen(&state->local.node, port))
+    {
+        chat_push_status(state, "Listening on port %d failed", port);
+        return 1;
+    }
+    else
+    {
+        chat_push_status(state, "Listening on port %d", port);
+    }
+    return 0;
+}
+void chat_disconnect(struct chat_state* state, uint32_t id)
+{
+    struct user* u=NULL;
+    switch(id)
+    {
+    case ID_REMOTE:
+        u=&state->remote;
+        break;
+    default:
+        break;
+    }
+    if(u!=NULL&&u->state!=NOT_CONNECTED)
+    {
+        user_disconnect(&state->remote);
+        chat_push_status(state, "Disconnected");
+    }
+}
+void chat_end_listen(struct chat_state* state)
+{
+    if(state->local.node.socket!=-1)
+    {
+        node_close(&state->local.node);
+        chat_push_status(state, "Stopped listening for connections");
+    }
+}
 static unsigned chat_init(struct chat_args* a, struct chat_state* state)
 {
     key_store_init(&state->keys);
@@ -137,39 +194,11 @@ static unsigned chat_init(struct chat_args* a, struct chat_state* state)
 
     if(a->wait_for_remote)
     {
-        if(node_listen(&state->local.node, a->addr.port))
-        {
-            chat_push_status(
-                state,
-                "Listening on port %d failed",
-                a->addr.port
-            );
-        }
-        else
-        {
-            chat_push_status(state, "Listening on port %d", a->addr.port);
-        }
+        chat_begin_listen(state, a->addr.port);
     }
     else
     {
-        if(user_begin_connect(&state->remote, &a->addr))
-        {
-            chat_push_status(
-                state,
-                "Connecting to %s:%d failed",
-                a->addr.node,
-                a->addr.port
-            );
-        }
-        else
-        {
-            chat_push_status(
-                state,
-                "Connecting to %s:%d",
-                a->addr.node,
-                a->addr.port
-            );
-        }
+        chat_begin_connect(state, &a->addr);
     }
     return 0;
 fail:
@@ -364,13 +393,6 @@ void chat(struct chat_args* a)
             }
             break;
         }
-        if(FD_ISSET(STDIN_FILENO, &read_ready))
-        {
-            if(ui_handle_input(&state))
-            {
-                break;
-            }
-        }
         if(FD_ISSET(state.remote.node.socket, &read_ready))
         {
             chat_handle_recv(&state);
@@ -405,6 +427,10 @@ void chat(struct chat_args* a)
             {
                 chat_push_status(&state, "Connected!");
             }
+        }
+        if(FD_ISSET(STDIN_FILENO, &read_ready))
+        {
+            ui_handle_input(&state);
         }
         if(state.remote.state==CONNECTED&&node_error(&state.remote.node))
         {

@@ -24,13 +24,15 @@ SOFTWARE.
 #ifndef OTPCHAT_ADDRESS_H_
 #define OTPCHAT_ADDRESS_H_
     #include <stdint.h>
+    #define DEFAULT_PORT 14137
+
     struct address
     {
         char* node;
         uint16_t port;
     };
     //Parses an address of form node:port. Returns non-zero on failure.
-    //If the port is unspecified, it will be set to 0
+    //If the port is unspecified, it will be set to DEFAULT_PORT
     unsigned parse_address(
         struct address* addr,
         const char* text

@@ -122,6 +122,7 @@ unsigned ui_history_lines(struct chat_state* state)
 unsigned ui_handle_input(struct chat_state* state)
 {
     int c=getch();
+    unsigned fail=0;
     if(c=='\n')
     {//Newline sends the message.
         if(state->input.size==0)
@@ -135,8 +136,7 @@ unsigned ui_handle_input(struct chat_state* state)
             command_str[state->input.size-1]=0;
             if(command_handle(state, command_str))
             {
-                free(command_str);
-                return 1;
+                fail=1;
             }
             free(command_str);
         }
@@ -234,7 +234,7 @@ unsigned ui_handle_input(struct chat_state* state)
         state->cursor_index=state->input.size;
     }
     ui_update(state);
-    return 0;
+    return fail;
 }
 static void draw_rect(int x, int y, unsigned w, unsigned h)
 {
@@ -457,11 +457,12 @@ void ui_init(struct chat_state* state)
     initscr();
     cbreak();
     noecho();
+    use_default_colors();
     keypad(stdscr, TRUE);
     start_color();
     init_pair(COLOR_KEY_USED, COLOR_WHITE, COLOR_RED);
     init_pair(COLOR_KEY_LEFT, COLOR_WHITE, COLOR_GREEN);
-    init_pair(ID_STATUS+COLOR_ID_OFFSET, COLOR_WHITE, COLOR_BLACK);
+    init_pair(ID_STATUS+COLOR_ID_OFFSET, -1, -1);
     init_pair(ID_LOCAL+COLOR_ID_OFFSET, COLOR_BLACK, COLOR_WHITE);
     init_pair(ID_REMOTE+COLOR_ID_OFFSET, COLOR_WHITE, COLOR_CYAN);
     ui_update(state);

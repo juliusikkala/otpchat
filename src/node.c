@@ -41,7 +41,7 @@ SOFTWARE.
 
 void node_close(struct node* n)
 {
-    if(n->socket>0)
+    if(n->socket!=-1)
     {
         close(n->socket);
         n->socket=-1;
@@ -167,6 +167,7 @@ unsigned node_listen(struct node* local, uint16_t port)
     if(local->socket==-1)
     {
         freeaddrinfo(local->info);
+        local->info=NULL;
         return 1;
     }
     int arg=1;
@@ -177,6 +178,8 @@ unsigned node_listen(struct node* local, uint16_t port)
     {
         close(local->socket);
         freeaddrinfo(local->info);
+        local->info=NULL;
+        local->socket=-1;
         return 1;
     }
     return 0;

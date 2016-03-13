@@ -35,7 +35,8 @@ unsigned parse_address(struct address* addr, const char* text)
         size_t len=strlen(text);
         addr->node=(char*)malloc(len+1);
         memcpy(addr->node, text, len);
-        addr->port=0;
+        addr->node[len]=0;
+        addr->port=DEFAULT_PORT;
         return 0;
     }
     //Read node name
