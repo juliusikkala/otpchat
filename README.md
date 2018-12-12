@@ -1,4 +1,4 @@
-#OTPCHAT
+# OTPCHAT
 
 A simple chat program which uses one-time pads for encryption. Each user has
 their own personal key which their client uses to encrypt the messages. The key
@@ -11,9 +11,9 @@ details.
 
 ![The program in use](https://i.imgur.com/LO5zHiL.png "Screenshot")
 
-##Usage
+## Usage
 
-###Generating keys
+### Generating keys
 ```
 otpchat --generate <size> <new-key-file>
 ```
@@ -23,7 +23,7 @@ Generate at least two keys, one for yourself and one for the person you want
 to chat with. Transfer *both* of the keys to the person on a physical medium
 such as a thumb drive.
 
-###Chatting
+### Chatting
 In all cases, you have to specify your local key and the expected remote key.
 
 ```
@@ -37,7 +37,7 @@ otpchat <local-key> <remote-key> <address>[:<port>]
 Attempts to connect to the given address and port. If the port isn't specified,
 defaults to port 14137.
 
-##Commands
+## Commands
 
 A command is preceded by '/'. For example, the command to quit the program is
 "/quit".
